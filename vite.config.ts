@@ -26,6 +26,36 @@ function mcpProxy() {
           return
         }
 
+        let parsedTarget: URL
+        try {
+          parsedTarget = new URL(target)
+        } catch {
+          res.statusCode = 400
+          res.setHeader('content-type', 'application/json')
+          res.end(JSON.stringify({ error: 'invalid target url' }))
+          return
+        }
+
+        if (parsedTarget.protocol !== 'http:' && parsedTarget.protocol !== 'https:') {
+          res.statusCode = 400
+          res.setHeader('content-type', 'application/json')
+          res.end(JSON.stringify({ error: `protocol ${parsedTarget.protocol} not allowed` }))
+          return
+        }
+
+        // Block cloud-metadata endpoints (SSRF hardening)
+        const blockedHosts = new Set([
+          '169.254.169.254',
+          'metadata.google.internal',
+          'metadata.goog',
+        ])
+        if (blockedHosts.has(parsedTarget.hostname.toLowerCase())) {
+          res.statusCode = 403
+          res.setHeader('content-type', 'application/json')
+          res.end(JSON.stringify({ error: 'host blocked by proxy' }))
+          return
+        }
+
         let body: Buffer | undefined
         if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'DELETE') {
           const chunks: Buffer[] = []
@@ -43,7 +73,9 @@ function mcpProxy() {
             lower === 'content-length' ||
             lower === 'accept-encoding' ||
             lower === 'origin' ||
-            lower === 'referer'
+            lower === 'referer' ||
+            lower === 'authorization' ||
+            lower === 'cookie'
           ) continue
           headers.set(key, Array.isArray(value) ? value.join(',') : value)
         }

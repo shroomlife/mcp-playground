@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Sparkle } from 'lucide-vue-next'
+import { Server, Clock, Activity } from 'lucide-vue-next'
 import type { ServerSummary } from '~/composables/useMcpInspector'
 
 const props = defineProps<{
@@ -15,135 +15,119 @@ const connectedAtLabel = computed(() => {
   if (!props.connectedAt) return '—'
   return new Date(props.connectedAt).toLocaleTimeString('de-DE')
 })
+
+const capabilityHint: Record<string, string> = {
+  tools: 'Aufrufbare Funktionen, die der Client ausführen kann.',
+  resources: 'Les­bare Daten­elemente (URIs), die der Server bereit­stellt.',
+  prompts: 'Vorgefertigte Prompt-Templates mit Argumenten.',
+  logging: 'Server kann Log-Nachrichten an den Client senden.',
+  completions: 'Argument-Autocomplete für Prompts und Resources.',
+  experimental: 'Nicht-standardisierte Erweiterungen dieses Servers.',
+  sampling: 'Server kann LLM-Sampling beim Client anfordern.',
+}
 </script>
 
 <template>
-  <section v-if="server" class="anim-in">
-    <div class="flex items-baseline justify-between mb-3">
-      <div class="flex items-baseline gap-3">
-        <span class="text-[10px] uppercase tracking-[0.18em] text-muted">§ 02 —</span>
-        <h2 class="font-display italic text-[22px] leading-none text-ink">Dossier</h2>
-      </div>
-      <div class="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-muted">
-        <span class="size-1.5 rounded-full bg-moss pulse-dot" />
-        online
-      </div>
-    </div>
+  <section v-if="server" class="fade-in">
+    <header class="mb-3">
+      <h2 class="text-[15px] font-semibold text-fg">Server-Info</h2>
+      <p class="text-[13px] text-fg-muted mt-0.5 max-w-2xl">
+        Basisdaten aus dem Initialize-Handshake — Name, Version und die deklarierten
+        Capabilities bestimmen, was der Server anbietet.
+      </p>
+    </header>
 
-    <div
-      class="relative bg-white/80 border border-rule shadow-paper rounded-sm overflow-hidden"
-    >
-      <!-- Top bar with filing metadata -->
-      <div
-        class="flex items-center justify-between px-5 py-2 border-b border-hairline bg-paper-2/60"
-      >
-        <span class="font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
-          File № {{ (connectedAt ?? 0).toString(36).toUpperCase().slice(-6) }}
-        </span>
-        <span class="font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
-          protocol {{ server.protocolVersion }}
-        </span>
-      </div>
-
-      <!-- Title block -->
-      <div class="px-5 pt-5 pb-4 border-b border-hairline">
-        <div class="flex items-start gap-4">
-          <div class="pt-1">
-            <Sparkle :size="18" :stroke-width="1.5" class="text-rust" />
+    <div class="bg-surface border border-border rounded-lg">
+      <!-- Identity -->
+      <div class="flex items-start gap-3 p-4 border-b border-border">
+        <div class="mt-0.5 p-1.5 bg-accent-soft text-accent rounded-md">
+          <Server :size="16" :stroke-width="2" />
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="font-mono text-[14px] font-medium text-fg break-all">
+            {{ server.name }}
           </div>
-          <div class="flex-1 min-w-0">
-            <div class="font-display text-[34px] md:text-[40px] leading-[1.02] text-ink tracking-tight break-all">
-              {{ server.name }}<span class="italic text-rust">.</span>
-            </div>
-            <div class="mt-1 flex items-baseline gap-3 flex-wrap">
-              <span class="font-mono text-[11px] uppercase tracking-[0.18em] text-muted">
-                version
-              </span>
-              <span class="font-mono text-[13px] text-ink">{{ server.version }}</span>
-              <span class="ascii-rule w-6" />
-              <span class="font-mono text-[11px] uppercase tracking-[0.18em] text-muted">
-                handshake
-              </span>
-              <span class="font-mono text-[13px] text-ink">
-                {{ latencyMs !== null ? `${latencyMs}ms` : '—' }}
-              </span>
-              <span class="ascii-rule w-6" />
-              <span class="font-mono text-[11px] uppercase tracking-[0.18em] text-muted">
-                opened
-              </span>
-              <span class="font-mono text-[13px] text-ink">{{ connectedAtLabel }}</span>
-            </div>
+          <div class="text-[12px] text-fg-muted mt-0.5">
+            Version <span class="font-mono text-fg-2">{{ server.version }}</span>
           </div>
         </div>
+        <dl class="hidden sm:flex items-start gap-5 text-[12px]">
+          <div>
+            <dt class="flex items-center gap-1 text-fg-muted">
+              <Activity :size="11" />
+              Handshake
+            </dt>
+            <dd class="font-mono text-fg mt-0.5">
+              {{ latencyMs !== null ? `${latencyMs} ms` : '—' }}
+            </dd>
+          </div>
+          <div>
+            <dt class="flex items-center gap-1 text-fg-muted">
+              <Clock :size="11" />
+              Verbunden
+            </dt>
+            <dd class="font-mono text-fg mt-0.5">{{ connectedAtLabel }}</dd>
+          </div>
+        </dl>
       </div>
 
       <!-- Instructions -->
-      <div
-        v-if="server.instructions"
-        class="px-5 py-4 border-b border-hairline bg-paper/50"
-      >
-        <div class="font-mono text-[10px] uppercase tracking-[0.18em] text-muted mb-1.5">
-          Server note
+      <div v-if="server.instructions" class="p-4 border-b border-border bg-surface-2/60">
+        <div class="text-[11px] uppercase tracking-wide text-fg-muted font-medium mb-1">
+          Server-Hinweis
         </div>
-        <p
-          class="font-display italic text-[17px] leading-[1.4] text-ink-2 max-w-3xl"
-        >
-          &ldquo;{{ server.instructions }}&rdquo;
+        <p class="text-[13px] leading-[1.5] text-fg-2 max-w-3xl">
+          {{ server.instructions }}
         </p>
       </div>
 
-      <!-- Capabilities + counts grid -->
-      <div class="grid grid-cols-2 md:grid-cols-4 divide-x divide-hairline border-b border-hairline">
-        <div class="px-5 py-4">
-          <div class="font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
+      <!-- Counts -->
+      <div class="grid grid-cols-3 divide-x divide-border border-b border-border">
+        <div class="p-4">
+          <div class="text-[11px] uppercase tracking-wide text-fg-muted font-medium">
             Tools
           </div>
-          <div class="font-display text-[32px] leading-none mt-1.5 text-ink">
-            {{ String(counts.tools).padStart(2, '0') }}
+          <div class="text-[22px] font-semibold text-fg mt-0.5 tabular-nums">
+            {{ counts.tools }}
           </div>
         </div>
-        <div class="px-5 py-4">
-          <div class="font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
+        <div class="p-4">
+          <div class="text-[11px] uppercase tracking-wide text-fg-muted font-medium">
             Resources
           </div>
-          <div class="font-display text-[32px] leading-none mt-1.5 text-ink">
-            {{ String(counts.resources).padStart(2, '0') }}
+          <div class="text-[22px] font-semibold text-fg mt-0.5 tabular-nums">
+            {{ counts.resources }}
           </div>
         </div>
-        <div class="px-5 py-4">
-          <div class="font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
+        <div class="p-4">
+          <div class="text-[11px] uppercase tracking-wide text-fg-muted font-medium">
             Prompts
           </div>
-          <div class="font-display text-[32px] leading-none mt-1.5 text-ink">
-            {{ String(counts.prompts).padStart(2, '0') }}
-          </div>
-        </div>
-        <div class="px-5 py-4">
-          <div class="font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
-            Capabilities
-          </div>
-          <div class="font-display text-[32px] leading-none mt-1.5 text-ink">
-            {{ String(capabilities.length).padStart(2, '0') }}
+          <div class="text-[22px] font-semibold text-fg mt-0.5 tabular-nums">
+            {{ counts.prompts }}
           </div>
         </div>
       </div>
 
-      <!-- Capability chips -->
-      <div class="px-5 py-3.5 flex flex-wrap items-center gap-1.5">
-        <span class="font-mono text-[10px] uppercase tracking-[0.18em] text-muted mr-2">
-          declared ⟶
-        </span>
-        <span
-          v-for="cap in capabilities"
-          :key="cap"
-          class="inline-flex items-center gap-1.5 px-2.5 py-1 border border-rule rounded-full font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink"
-        >
-          <span class="size-1 rounded-full bg-rust" />
-          {{ cap }}
-        </span>
-        <span v-if="!capabilities.length" class="font-mono text-[11px] text-muted italic">
-          keine capabilities gemeldet
-        </span>
+      <!-- Capabilities -->
+      <div class="p-4">
+        <div class="text-[11px] uppercase tracking-wide text-fg-muted font-medium mb-2">
+          Capabilities
+        </div>
+        <div v-if="capabilities.length" class="flex flex-wrap gap-1.5">
+          <span
+            v-for="cap in capabilities"
+            :key="cap"
+            class="inline-flex items-center gap-1.5 px-2 py-1 border border-border rounded-md font-mono text-[11.5px] text-fg-2"
+            :title="capabilityHint[cap] ?? 'Deklarierte Capability'"
+          >
+            <span class="size-1.5 rounded-full bg-success" />
+            {{ cap }}
+          </span>
+        </div>
+        <p v-else class="text-[12px] text-fg-muted italic">
+          Keine Capabilities deklariert.
+        </p>
       </div>
     </div>
   </section>

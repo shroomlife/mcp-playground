@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { Plug, PlugZap, Loader2, Radio, Cable } from 'lucide-vue-next'
+import { Plug, Unplug, Loader2 } from 'lucide-vue-next'
 import type { ConnectionState, TransportKind } from '~/composables/useMcpInspector'
 
 const props = defineProps<{
@@ -18,119 +18,121 @@ const transport = ref<TransportKind>('http')
 
 const isConnecting = computed(() => props.state === 'connecting')
 const isConnected = computed(() => props.state === 'connected')
+const isBusy = computed(() => isConnecting.value)
+
+const submitDisabled = computed(() => {
+  if (isBusy.value) return true
+  if (isConnected.value) return false
+  return !url.value.trim()
+})
 
 const examples = [
-  'http://localhost:3000/mcp',
-  'https://mcp.deepwiki.com/mcp',
-  'http://127.0.0.1:8787/sse',
+  { url: 'http://localhost:3000/mcp', transport: 'http' as const, label: 'Lokaler HTTP-Server' },
+  { url: 'https://mcp.deepwiki.com/mcp', transport: 'http' as const, label: 'DeepWiki (öffentlich)' },
+  { url: 'http://127.0.0.1:8787/sse', transport: 'sse' as const, label: 'Lokaler SSE-Server' },
 ]
 
 function submit() {
+  if (isBusy.value) return
   if (isConnected.value) {
     emit('disconnect')
     return
   }
+  if (!url.value.trim()) return
   emit('connect', url.value, transport.value)
 }
 
-function useExample(example: string) {
-  url.value = example
-  transport.value = example.endsWith('/sse') ? 'sse' : 'http'
+function useExample(ex: { url: string; transport: TransportKind }) {
+  if (isBusy.value || isConnected.value) return
+  url.value = ex.url
+  transport.value = ex.transport
 }
 </script>
 
 <template>
-  <section class="anim-in">
-    <div class="flex items-baseline justify-between mb-3">
-      <div class="flex items-baseline gap-3">
-        <span class="text-[10px] uppercase tracking-[0.18em] text-muted">§ 01 —</span>
-        <h2 class="font-display italic text-[22px] leading-none text-ink">
-          Establish&nbsp;contact
-        </h2>
-      </div>
-      <div class="hidden md:flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-muted">
-        <span class="marquee-border h-[3px] w-16" />
-        <span>Transport · Session · Handshake</span>
-      </div>
-    </div>
-
+  <section class="fade-in">
     <form @submit.prevent="submit" class="space-y-3">
-      <div
-        class="flex flex-col md:flex-row md:items-stretch gap-0 md:gap-0 bg-white/70 backdrop-blur-sm border border-rule rounded-sm overflow-hidden shadow-paper"
-      >
-        <div class="flex items-center gap-2 px-4 py-3 md:border-r border-hairline md:w-auto">
-          <span class="text-rust">◎</span>
-          <span class="text-[10px] uppercase tracking-[0.18em] text-muted font-mono">URL</span>
-          <span class="caret text-ink">|</span>
-        </div>
+      <div class="bg-surface border border-border rounded-lg overflow-hidden">
+        <div class="flex flex-col md:flex-row md:items-stretch">
+          <label class="flex flex-col flex-1 min-w-0 px-4 py-2.5">
+            <span class="text-[11px] uppercase tracking-wide text-fg-muted font-medium">
+              Server-URL
+            </span>
+            <input
+              v-model="url"
+              type="url"
+              inputmode="url"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="https://mcp.example.com/mcp"
+              :disabled="isConnected || isConnecting"
+              class="focus-ring -mx-1 mt-0.5 px-1 py-0.5 bg-transparent font-mono text-[13.5px] text-fg placeholder:text-fg-subtle focus:outline-none disabled:text-fg-muted rounded"
+            />
+          </label>
 
-        <input
-          v-model="url"
-          type="text"
-          inputmode="url"
-          autocomplete="off"
-          spellcheck="false"
-          placeholder="https://mcp.example.com/mcp"
-          class="flex-1 min-w-0 px-4 py-3.5 bg-transparent font-mono text-[13.5px] text-ink placeholder:text-muted/70 focus:outline-none focus:bg-paper-2/50"
-          :disabled="isConnected || isConnecting"
-        />
-
-        <div
-          class="flex items-center border-t md:border-t-0 md:border-l border-hairline divide-x divide-hairline"
-        >
-          <button
-            type="button"
-            @click="transport = 'http'"
-            :disabled="isConnected || isConnecting"
-            class="flex items-center gap-1.5 px-3 py-3 text-[10px] uppercase tracking-[0.16em] transition-colors"
-            :class="transport === 'http' ? 'bg-ink text-paper' : 'text-muted hover:text-ink'"
+          <div
+            role="radiogroup"
+            aria-label="Transport wählen"
+            class="flex items-stretch border-t md:border-t-0 md:border-l border-border"
           >
-            <Cable :size="11" :stroke-width="2" />
-            HTTP
-          </button>
+            <button
+              type="button"
+              role="radio"
+              :aria-checked="transport === 'http'"
+              @click="transport = 'http'"
+              :disabled="isConnected || isConnecting"
+              class="focus-ring px-4 py-2 text-[12.5px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              :class="transport === 'http'
+                ? 'bg-fg text-bg'
+                : 'text-fg-2 hover:bg-surface-2'"
+            >
+              HTTP
+            </button>
+            <button
+              type="button"
+              role="radio"
+              :aria-checked="transport === 'sse'"
+              @click="transport = 'sse'"
+              :disabled="isConnected || isConnecting"
+              class="focus-ring px-4 py-2 text-[12.5px] font-medium transition-colors border-l border-border disabled:opacity-40 disabled:cursor-not-allowed"
+              :class="transport === 'sse'
+                ? 'bg-fg text-bg'
+                : 'text-fg-2 hover:bg-surface-2'"
+            >
+              SSE
+            </button>
+          </div>
+
           <button
-            type="button"
-            @click="transport = 'sse'"
-            :disabled="isConnected || isConnecting"
-            class="flex items-center gap-1.5 px-3 py-3 text-[10px] uppercase tracking-[0.16em] transition-colors"
-            :class="transport === 'sse' ? 'bg-ink text-paper' : 'text-muted hover:text-ink'"
+            type="submit"
+            :disabled="submitDisabled"
+            class="focus-ring flex items-center justify-center gap-2 px-5 py-3 text-[13px] font-medium transition-colors border-t md:border-t-0 md:border-l border-border disabled:opacity-40 disabled:cursor-not-allowed"
+            :class="isConnected
+              ? 'text-danger hover:bg-danger-soft'
+              : 'bg-accent text-white hover:brightness-110'"
           >
-            <Radio :size="11" :stroke-width="2" />
-            SSE
+            <Loader2 v-if="isConnecting" :size="14" class="animate-spin" />
+            <Unplug v-else-if="isConnected" :size="14" />
+            <Plug v-else :size="14" />
+            <span>
+              {{ isConnecting ? 'Verbinde …' : isConnected ? 'Trennen' : 'Verbinden' }}
+            </span>
           </button>
         </div>
-
-        <button
-          type="submit"
-          :disabled="!url.trim() && !isConnected"
-          class="flex items-center gap-2 px-5 py-3.5 text-[11px] uppercase tracking-[0.2em] font-mono transition-colors border-t md:border-t-0 md:border-l border-hairline disabled:opacity-40 disabled:cursor-not-allowed"
-          :class="
-            isConnected
-              ? 'bg-paper-2 text-ink hover:bg-paper-3'
-              : 'bg-rust text-paper hover:bg-ink'
-          "
-        >
-          <Loader2 v-if="isConnecting" :size="13" class="animate-spin" />
-          <PlugZap v-else-if="isConnected" :size="13" />
-          <Plug v-else :size="13" />
-          <span>
-            {{ isConnecting ? 'handshake…' : isConnected ? 'disconnect' : 'inspect' }}
-          </span>
-        </button>
       </div>
 
-      <div class="flex flex-wrap items-center gap-2 pl-1">
-        <span class="text-[10px] uppercase tracking-[0.16em] text-muted">Templates</span>
-        <span class="ascii-rule w-6" />
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px]">
+        <span class="text-fg-muted">Beispiele:</span>
         <button
           v-for="ex in examples"
-          :key="ex"
+          :key="ex.url"
           type="button"
           @click="useExample(ex)"
-          class="font-mono text-[11px] text-muted hover:text-rust transition-colors border-b border-dotted border-transparent hover:border-rust/60"
           :disabled="isConnected || isConnecting"
+          class="focus-ring text-accent hover:underline disabled:opacity-40 disabled:cursor-not-allowed font-mono"
+          :title="ex.label"
         >
-          {{ ex }}
+          {{ ex.url }}
         </button>
       </div>
     </form>

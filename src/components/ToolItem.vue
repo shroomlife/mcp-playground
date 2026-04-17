@@ -8,7 +8,9 @@ import type { McpTool } from '~/composables/useMcpInspector'
 const props = defineProps<{ tool: McpTool; index: number }>()
 
 const paramCount = computed(() => {
-  const schema = props.tool.inputSchema as { properties?: Record<string, unknown>; required?: string[] } | undefined
+  const schema = props.tool.inputSchema as
+    | { properties?: Record<string, unknown>; required?: string[] }
+    | undefined
   if (!schema?.properties) return 0
   return Object.keys(schema.properties).length
 })
@@ -23,64 +25,68 @@ const requiredCount = computed(() => {
   <AccordionItem :value="tool.name" class="group">
     <AccordionHeader as-child>
       <AccordionTrigger
-        class="w-full flex items-center gap-4 px-5 py-3.5 text-left hover:bg-paper-2/60 transition-colors border-b border-hairline group-data-[state=open]:bg-paper-2/80 group-last:border-b-0"
+        class="focus-ring w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-surface-2 transition-colors border-b border-border group-data-[state=open]:bg-surface-2"
       >
-        <span
-          class="font-mono text-[10px] text-muted tabular-nums w-6 tracking-tight"
-        >
+        <span class="font-mono text-[11px] text-fg-muted tabular-nums w-6 pt-0.5">
           {{ String(index + 1).padStart(2, '0') }}
         </span>
-        <Wrench :size="14" :stroke-width="1.5" class="text-rust shrink-0" />
+        <Wrench :size="14" :stroke-width="1.75" class="text-accent shrink-0 mt-0.5" />
         <div class="flex-1 min-w-0">
-          <div class="flex items-baseline gap-3 flex-wrap">
-            <span class="font-mono text-[13.5px] text-ink">{{ tool.name }}</span>
+          <div class="flex items-baseline gap-2 flex-wrap">
+            <span class="font-mono text-[13px] font-medium text-fg">{{ tool.name }}</span>
             <span
               v-if="tool.title && tool.title !== tool.name"
-              class="font-display italic text-[14px] text-muted"
+              class="text-[12px] text-fg-muted"
             >
-              — {{ tool.title }}
+              {{ tool.title }}
             </span>
           </div>
           <p
             v-if="tool.description"
-            class="text-[12px] text-muted mt-0.5 line-clamp-1 group-data-[state=open]:line-clamp-none"
+            class="text-[12.5px] text-fg-2 mt-0.5 line-clamp-2"
           >
             {{ tool.description }}
           </p>
         </div>
-        <div class="hidden md:flex items-center gap-3 text-[10px] font-mono uppercase tracking-[0.14em] text-muted">
-          <span>{{ paramCount }} param</span>
-          <span class="text-hairline">·</span>
+        <div class="hidden md:flex items-center gap-3 text-[11px] font-mono text-fg-muted pt-0.5">
+          <span>{{ paramCount }} Param</span>
+          <span>·</span>
           <span>{{ requiredCount }} req</span>
         </div>
         <ChevronDown
           :size="14"
-          class="text-muted transition-transform group-data-[state=open]:rotate-180"
+          class="text-fg-muted transition-transform group-data-[state=open]:rotate-180 mt-1"
         />
       </AccordionTrigger>
     </AccordionHeader>
 
     <AccordionContent>
-      <div class="px-5 py-4 border-b border-hairline bg-paper/70 space-y-3">
+      <div class="px-4 py-4 border-b border-border bg-surface-2/40 space-y-4">
         <div v-if="tool.description" class="max-w-3xl">
-          <div class="font-mono text-[10px] uppercase tracking-[0.18em] text-muted mb-1">
-            Description
+          <div class="text-[11px] uppercase tracking-wide text-fg-muted font-medium mb-1">
+            Beschreibung
           </div>
-          <p class="font-display text-[15px] leading-[1.5] text-ink-2">
+          <p class="text-[13px] leading-[1.55] text-fg-2 whitespace-pre-line">
             {{ tool.description }}
           </p>
         </div>
 
         <div v-if="tool.inputSchema">
-          <div class="font-mono text-[10px] uppercase tracking-[0.18em] text-muted mb-1.5">
-            Input schema
+          <div class="text-[11px] uppercase tracking-wide text-fg-muted font-medium mb-1.5">
+            Input-Schema
+            <span class="text-fg-subtle font-normal normal-case tracking-normal">
+              — Form der Argumente für den Tool-Call
+            </span>
           </div>
           <JsonView :value="tool.inputSchema" />
         </div>
 
         <div v-if="tool.outputSchema">
-          <div class="font-mono text-[10px] uppercase tracking-[0.18em] text-muted mb-1.5">
-            Output schema
+          <div class="text-[11px] uppercase tracking-wide text-fg-muted font-medium mb-1.5">
+            Output-Schema
+            <span class="text-fg-subtle font-normal normal-case tracking-normal">
+              — Form des Rückgabewerts
+            </span>
           </div>
           <JsonView :value="tool.outputSchema" />
         </div>

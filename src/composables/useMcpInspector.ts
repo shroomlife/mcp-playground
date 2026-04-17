@@ -9,7 +9,6 @@ export type TransportKind = 'http' | 'sse'
 export interface ServerSummary {
   name: string
   version: string
-  protocolVersion: string
   instructions?: string
   capabilities: Record<string, unknown>
 }
@@ -50,12 +49,17 @@ export interface McpPrompt {
 }
 
 export interface LogEntry {
+  id: number
   at: number
   level: 'info' | 'success' | 'warn' | 'error'
   message: string
 }
 
 const noop = () => {}
+
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : []
+}
 
 export function useMcpInspector() {
   const state = ref<ConnectionState>('idle')
@@ -73,19 +77,24 @@ export function useMcpInspector() {
   const log = ref<LogEntry[]>([])
 
   const client = shallowRef<Client | null>(null)
+  let logCounter = 0
 
   function pushLog(level: LogEntry['level'], message: string) {
-    log.value = [{ at: Date.now(), level, message }, ...log.value].slice(0, 40)
+    logCounter += 1
+    log.value = [{ id: logCounter, at: Date.now(), level, message }, ...log.value].slice(0, 60)
   }
 
   function buildProxyUrl(target: string): URL {
     const trimmed = target.trim()
     if (!trimmed) throw new Error('URL ist leer')
-    // Validate target parses as URL
+    let parsed: URL
     try {
-      new URL(trimmed)
+      parsed = new URL(trimmed)
     } catch {
       throw new Error('Ungültige URL — inklusive https:// eingeben')
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new Error(`Protokoll ${parsed.protocol} nicht erlaubt — nur http/https`)
     }
     const encoded = encodeURIComponent(trimmed)
     return new URL(`/api/mcp?url=${encoded}`, window.location.origin)
@@ -98,6 +107,8 @@ export function useMcpInspector() {
     connectedAt.value = null
     latencyMs.value = null
     if (c) {
+      c.onclose = noop
+      c.onerror = noop
       try {
         await c.close()
       } catch (err) {
@@ -139,11 +150,10 @@ export function useMcpInspector() {
         pushLog('error', `Client-Fehler: ${err.message}`)
       }
       c.onclose = () => {
-        if (state.value === 'connected') {
-          pushLog('warn', 'Verbindung geschlossen')
-          state.value = 'idle'
-          connectedAt.value = null
-        }
+        if (client.value !== c) return
+        pushLog('warn', 'Verbindung geschlossen')
+        state.value = 'idle'
+        connectedAt.value = null
       }
 
       await c.connect(transport)
@@ -158,7 +168,6 @@ export function useMcpInspector() {
       server.value = {
         name: info?.name ?? 'unknown',
         version: info?.version ?? '0.0.0',
-        protocolVersion: (info as { protocolVersion?: string } | undefined)?.protocolVersion ?? '—',
         instructions: c.getInstructions(),
         capabilities: caps as Record<string, unknown>,
       }
@@ -183,7 +192,7 @@ export function useMcpInspector() {
     if (!caps.tools || !client.value) return
     try {
       const res = await client.value.listTools()
-      tools.value = (res.tools ?? []) as McpTool[]
+      tools.value = asArray<McpTool>(res.tools)
       pushLog('info', `${tools.value.length} Tool(s) geladen`)
     } catch (err) {
       pushLog('warn', `tools/list fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`)
@@ -194,7 +203,7 @@ export function useMcpInspector() {
     if (!caps.resources || !client.value) return
     try {
       const res = await client.value.listResources()
-      resources.value = (res.resources ?? []) as McpResource[]
+      resources.value = asArray<McpResource>(res.resources)
       pushLog('info', `${resources.value.length} Resource(s) geladen`)
     } catch (err) {
       pushLog('warn', `resources/list fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`)
@@ -205,9 +214,9 @@ export function useMcpInspector() {
     if (!caps.resources || !client.value) return
     try {
       const res = await client.value.listResourceTemplates()
-      resourceTemplates.value = (res.resourceTemplates ?? []) as McpResourceTemplate[]
+      resourceTemplates.value = asArray<McpResourceTemplate>(res.resourceTemplates)
     } catch {
-      // Optional capability — ignore
+      // optional — viele Server unterstützen keine Templates
     }
   }
 
@@ -215,7 +224,7 @@ export function useMcpInspector() {
     if (!caps.prompts || !client.value) return
     try {
       const res = await client.value.listPrompts()
-      prompts.value = (res.prompts ?? []) as McpPrompt[]
+      prompts.value = asArray<McpPrompt>(res.prompts)
       pushLog('info', `${prompts.value.length} Prompt(s) geladen`)
     } catch (err) {
       pushLog('warn', `prompts/list fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`)

@@ -1,11 +1,17 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { TabsRoot, TabsList, TabsTrigger, TabsContent, AccordionRoot } from 'reka-ui'
-import { Wrench, FileText, MessageSquareQuote, ScrollText } from 'lucide-vue-next'
+import { Wrench, FileText, MessageSquareText, ScrollText } from 'lucide-vue-next'
 import ToolItem from './ToolItem.vue'
 import ResourceItem from './ResourceItem.vue'
 import PromptItem from './PromptItem.vue'
-import type { McpTool, McpResource, McpResourceTemplate, McpPrompt, LogEntry } from '~/composables/useMcpInspector'
+import type {
+  McpTool,
+  McpResource,
+  McpResourceTemplate,
+  McpPrompt,
+  LogEntry,
+} from '~/composables/useMcpInspector'
 
 defineProps<{
   tools: McpTool[]
@@ -19,95 +25,111 @@ const tab = ref<'tools' | 'resources' | 'prompts' | 'log'>('tools')
 
 function formatTime(at: number) {
   const d = new Date(at)
-  return d.toLocaleTimeString('de-DE', { hour12: false }) + '.' + String(d.getMilliseconds()).padStart(3, '0')
+  return (
+    d.toLocaleTimeString('de-DE', { hour12: false }) +
+    '.' +
+    String(d.getMilliseconds()).padStart(3, '0')
+  )
 }
 </script>
 
 <template>
-  <section class="anim-in">
-    <div class="flex items-baseline justify-between mb-3">
-      <div class="flex items-baseline gap-3">
-        <span class="text-[10px] uppercase tracking-[0.18em] text-muted">§ 03 —</span>
-        <h2 class="font-display italic text-[22px] leading-none text-ink">Findings</h2>
-      </div>
-    </div>
+  <section class="fade-in">
+    <header class="mb-3">
+      <h2 class="text-[15px] font-semibold text-fg">Angebot des Servers</h2>
+      <p class="text-[13px] text-fg-muted mt-0.5 max-w-2xl">
+        Die drei Bausteine von MCP: <strong class="font-medium text-fg-2">Tools</strong>
+        (ausführen), <strong class="font-medium text-fg-2">Resources</strong> (lesen),
+        <strong class="font-medium text-fg-2">Prompts</strong> (Templates). Der Log zeigt
+        jede Antwort vom Server.
+      </p>
+    </header>
 
-    <TabsRoot v-model="tab" class="bg-white/80 border border-rule rounded-sm shadow-paper overflow-hidden">
-      <TabsList
-        class="flex border-b border-rule bg-paper-2/60 divide-x divide-hairline"
-      >
+    <TabsRoot
+      v-model="tab"
+      class="bg-surface border border-border rounded-lg overflow-hidden"
+    >
+      <TabsList class="flex border-b border-border bg-surface-2/60" aria-label="Inspector-Bereiche">
         <TabsTrigger
           value="tools"
-          class="flex items-center gap-2 px-5 py-3 text-[11px] uppercase tracking-[0.18em] text-muted data-[state=active]:bg-white data-[state=active]:text-ink relative transition-colors focus:outline-none"
+          class="focus-ring flex items-center gap-2 px-4 py-2.5 text-[12.5px] font-medium text-fg-muted data-[state=active]:text-fg data-[state=active]:bg-surface relative transition-colors"
         >
-          <Wrench :size="12" :stroke-width="1.5" />
+          <Wrench :size="13" :stroke-width="1.75" />
           Tools
-          <span class="font-mono text-[10px] tabular-nums text-muted ml-0.5">
-            {{ String(tools.length).padStart(2, '0') }}
+          <span class="font-mono text-[11px] tabular-nums text-fg-muted">
+            {{ tools.length }}
           </span>
           <span
             v-if="tab === 'tools'"
-            class="absolute inset-x-0 -bottom-px h-[2px] bg-rust"
+            class="absolute inset-x-3 -bottom-px h-[2px] bg-accent rounded-full"
           />
         </TabsTrigger>
         <TabsTrigger
           value="resources"
-          class="flex items-center gap-2 px-5 py-3 text-[11px] uppercase tracking-[0.18em] text-muted data-[state=active]:bg-white data-[state=active]:text-ink relative transition-colors focus:outline-none"
+          class="focus-ring flex items-center gap-2 px-4 py-2.5 text-[12.5px] font-medium text-fg-muted data-[state=active]:text-fg data-[state=active]:bg-surface relative transition-colors"
         >
-          <FileText :size="12" :stroke-width="1.5" />
+          <FileText :size="13" :stroke-width="1.75" />
           Resources
-          <span class="font-mono text-[10px] tabular-nums text-muted ml-0.5">
-            {{ String(resources.length + resourceTemplates.length).padStart(2, '0') }}
+          <span class="font-mono text-[11px] tabular-nums text-fg-muted">
+            {{ resources.length + resourceTemplates.length }}
           </span>
           <span
             v-if="tab === 'resources'"
-            class="absolute inset-x-0 -bottom-px h-[2px] bg-rust"
+            class="absolute inset-x-3 -bottom-px h-[2px] bg-accent rounded-full"
           />
         </TabsTrigger>
         <TabsTrigger
           value="prompts"
-          class="flex items-center gap-2 px-5 py-3 text-[11px] uppercase tracking-[0.18em] text-muted data-[state=active]:bg-white data-[state=active]:text-ink relative transition-colors focus:outline-none"
+          class="focus-ring flex items-center gap-2 px-4 py-2.5 text-[12.5px] font-medium text-fg-muted data-[state=active]:text-fg data-[state=active]:bg-surface relative transition-colors"
         >
-          <MessageSquareQuote :size="12" :stroke-width="1.5" />
+          <MessageSquareText :size="13" :stroke-width="1.75" />
           Prompts
-          <span class="font-mono text-[10px] tabular-nums text-muted ml-0.5">
-            {{ String(prompts.length).padStart(2, '0') }}
+          <span class="font-mono text-[11px] tabular-nums text-fg-muted">
+            {{ prompts.length }}
           </span>
           <span
             v-if="tab === 'prompts'"
-            class="absolute inset-x-0 -bottom-px h-[2px] bg-rust"
+            class="absolute inset-x-3 -bottom-px h-[2px] bg-accent rounded-full"
           />
         </TabsTrigger>
         <TabsTrigger
           value="log"
-          class="flex items-center gap-2 px-5 py-3 text-[11px] uppercase tracking-[0.18em] text-muted data-[state=active]:bg-white data-[state=active]:text-ink relative transition-colors focus:outline-none ml-auto"
+          class="focus-ring flex items-center gap-2 px-4 py-2.5 text-[12.5px] font-medium text-fg-muted data-[state=active]:text-fg data-[state=active]:bg-surface relative transition-colors ml-auto"
         >
-          <ScrollText :size="12" :stroke-width="1.5" />
+          <ScrollText :size="13" :stroke-width="1.75" />
           Log
           <span
             v-if="tab === 'log'"
-            class="absolute inset-x-0 -bottom-px h-[2px] bg-rust"
+            class="absolute inset-x-3 -bottom-px h-[2px] bg-accent rounded-full"
           />
         </TabsTrigger>
       </TabsList>
 
+      <!-- Tools -->
       <TabsContent value="tools" class="focus:outline-none">
-        <div v-if="tools.length === 0" class="px-5 py-10 text-center">
-          <div class="font-display italic text-[20px] text-muted">nichts ausgestellt.</div>
-          <div class="font-mono text-[11px] uppercase tracking-[0.18em] text-muted mt-1">
+        <div v-if="tools.length === 0" class="px-4 py-10 text-center">
+          <div class="text-[13px] text-fg-muted">
             Dieser Server deklariert keine Tools.
           </div>
         </div>
-        <AccordionRoot v-else type="multiple" class="divide-y divide-transparent">
-          <ToolItem v-for="(tool, i) in tools" :key="tool.name" :tool="tool" :index="i" />
+        <AccordionRoot v-else type="multiple">
+          <ToolItem
+            v-for="(tool, i) in tools"
+            :key="tool.name"
+            :tool="tool"
+            :index="i"
+          />
         </AccordionRoot>
       </TabsContent>
 
+      <!-- Resources -->
       <TabsContent value="resources" class="focus:outline-none">
-        <div v-if="resources.length === 0 && resourceTemplates.length === 0" class="px-5 py-10 text-center">
-          <div class="font-display italic text-[20px] text-muted">leere Bibliothek.</div>
-          <div class="font-mono text-[11px] uppercase tracking-[0.18em] text-muted mt-1">
-            keine Resources gemeldet.
+        <div
+          v-if="resources.length === 0 && resourceTemplates.length === 0"
+          class="px-4 py-10 text-center"
+        >
+          <div class="text-[13px] text-fg-muted">
+            Keine Resources oder Templates gemeldet.
           </div>
         </div>
         <ul v-else>
@@ -127,44 +149,56 @@ function formatTime(at: number) {
         </ul>
       </TabsContent>
 
+      <!-- Prompts -->
       <TabsContent value="prompts" class="focus:outline-none">
-        <div v-if="prompts.length === 0" class="px-5 py-10 text-center">
-          <div class="font-display italic text-[20px] text-muted">keine Prompts vorhanden.</div>
-          <div class="font-mono text-[11px] uppercase tracking-[0.18em] text-muted mt-1">
-            der Server bietet keine vordefinierten Prompts.
+        <div v-if="prompts.length === 0" class="px-4 py-10 text-center">
+          <div class="text-[13px] text-fg-muted">
+            Keine Prompts vorhanden.
           </div>
         </div>
         <ul v-else>
-          <PromptItem v-for="(p, i) in prompts" :key="p.name" :prompt="p" :index="i" />
+          <PromptItem
+            v-for="(p, i) in prompts"
+            :key="p.name"
+            :prompt="p"
+            :index="i"
+          />
         </ul>
       </TabsContent>
 
+      <!-- Log -->
       <TabsContent value="log" class="focus:outline-none">
-        <ul v-if="log.length" class="divide-y divide-hairline">
+        <ul
+          v-if="log.length"
+          role="log"
+          aria-live="polite"
+          aria-label="Verbindungs-Log"
+          class="divide-y divide-border"
+        >
           <li
             v-for="entry in log"
-            :key="entry.at + entry.message"
-            class="flex items-start gap-4 px-5 py-2.5 font-mono text-[12px]"
+            :key="entry.id"
+            class="flex items-start gap-3 px-4 py-2 font-mono text-[12px]"
           >
-            <span class="text-muted tabular-nums whitespace-nowrap">
+            <span class="text-fg-muted tabular-nums whitespace-nowrap">
               {{ formatTime(entry.at) }}
             </span>
             <span
-              class="w-12 shrink-0 text-[10px] uppercase tracking-[0.16em]"
+              class="w-14 shrink-0 text-[10.5px] uppercase tracking-wide font-medium"
               :class="{
-                'text-moss': entry.level === 'success',
-                'text-rust': entry.level === 'error',
-                'text-ochre': entry.level === 'warn',
-                'text-muted': entry.level === 'info',
+                'text-success': entry.level === 'success',
+                'text-danger': entry.level === 'error',
+                'text-warning': entry.level === 'warn',
+                'text-fg-muted': entry.level === 'info',
               }"
             >
               {{ entry.level }}
             </span>
-            <span class="text-ink flex-1 break-words">{{ entry.message }}</span>
+            <span class="text-fg-2 flex-1 break-words">{{ entry.message }}</span>
           </li>
         </ul>
-        <div v-else class="px-5 py-10 text-center">
-          <div class="font-display italic text-[20px] text-muted">Log ist still.</div>
+        <div v-else class="px-4 py-10 text-center">
+          <div class="text-[13px] text-fg-muted">Log ist leer.</div>
         </div>
       </TabsContent>
     </TabsRoot>
