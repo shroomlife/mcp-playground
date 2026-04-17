@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { AlertCircle, Loader2 } from 'lucide-vue-next'
+import { Loader2 } from 'lucide-vue-next'
 import { useMcpInspector } from '~/composables/useMcpInspector'
 import ConnectionForm from '~/components/ConnectionForm.vue'
 import ServerCard from '~/components/ServerCard.vue'
 import InspectorPanels from '~/components/InspectorPanels.vue'
+import ErrorPanel from '~/components/ErrorPanel.vue'
 import type { TransportKind } from '~/composables/useMcpInspector'
 
 const {
   state,
-  error,
+  errorDetails,
   url,
+  transportKind,
   latencyMs,
   connectedAt,
   server,
@@ -23,12 +25,22 @@ const {
   counts,
   connect,
   disconnect,
+  retryWithOtherTransport,
 } = useMcpInspector()
 
 const isLanding = computed(() => state.value !== 'connected')
 
 function handleConnect(nextUrl: string, transport: TransportKind) {
   void connect(nextUrl, transport)
+}
+
+function handleRetry() {
+  if (!url.value) return
+  void connect(url.value, transportKind.value)
+}
+
+function handleTryOther() {
+  void retryWithOtherTransport()
 }
 </script>
 
@@ -105,12 +117,11 @@ function handleConnect(nextUrl: string, transport: TransportKind) {
           </p>
         </div>
 
-        <div class="bg-surface/90 backdrop-blur-sm border border-border rounded-xl p-5 shadow-[0_8px_40px_-20px_rgba(0,0,0,0.12)]">
+        <div class="bg-surface/90 backdrop-blur-sm border border-border rounded-xl p-6 shadow-[0_8px_40px_-20px_rgba(0,0,0,0.12)]">
           <ConnectionForm
             :state="state"
             :initial-url="url"
             @connect="handleConnect"
-            @disconnect="() => { void disconnect() }"
           />
         </div>
 
@@ -125,25 +136,12 @@ function handleConnect(nextUrl: string, transport: TransportKind) {
 
         <!-- Error panel -->
         <Transition name="fade">
-          <div
-            v-if="state === 'error' && error"
-            class="mt-5 bg-danger-soft border border-danger/30 rounded-lg p-4 flex items-start gap-3"
-          >
-            <AlertCircle
-              :size="16"
-              :stroke-width="2"
-              class="text-danger shrink-0 mt-0.5"
+          <div v-if="state === 'error' && errorDetails" class="mt-5">
+            <ErrorPanel
+              :details="errorDetails"
+              @retry="handleRetry"
+              @try-other="handleTryOther"
             />
-            <div class="min-w-0 flex-1">
-              <div class="text-[12.5px] font-medium text-danger">
-                Verbindung fehlgeschlagen
-              </div>
-              <p class="text-[13px] text-fg-2 mt-1 break-words">{{ error }}</p>
-              <p class="text-[12px] text-fg-muted mt-2">
-                Prüfe URL und Transport (HTTP/SSE). Der Dev-Proxy leitet Requests
-                serverseitig weiter und umgeht CORS.
-              </p>
-            </div>
           </div>
         </Transition>
 

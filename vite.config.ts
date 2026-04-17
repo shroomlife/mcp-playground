@@ -39,7 +39,12 @@ function mcpProxy() {
         if (parsedTarget.protocol !== 'http:' && parsedTarget.protocol !== 'https:') {
           res.statusCode = 400
           res.setHeader('content-type', 'application/json')
-          res.end(JSON.stringify({ error: `protocol ${parsedTarget.protocol} not allowed` }))
+          res.end(JSON.stringify({
+            error: 'invalid_protocol',
+            code: 'INVALID_PROTOCOL',
+            message: `Protokoll ${parsedTarget.protocol} nicht erlaubt`,
+            target,
+          }))
           return
         }
 
@@ -52,7 +57,12 @@ function mcpProxy() {
         if (blockedHosts.has(parsedTarget.hostname.toLowerCase())) {
           res.statusCode = 403
           res.setHeader('content-type', 'application/json')
-          res.end(JSON.stringify({ error: 'host blocked by proxy' }))
+          res.end(JSON.stringify({
+            error: 'host_blocked',
+            code: 'HOST_BLOCKED',
+            message: `Host ${parsedTarget.hostname} ist gesperrt`,
+            target,
+          }))
           return
         }
 
@@ -112,11 +122,16 @@ function mcpProxy() {
           }
           res.end()
         } catch (err) {
+          const cause = (err as { cause?: { code?: string; message?: string } }).cause
+          const rawCode = cause?.code ?? 'UNKNOWN'
+          const rawMessage = cause?.message ?? (err instanceof Error ? err.message : String(err))
           res.statusCode = 502
           res.setHeader('content-type', 'application/json')
           res.end(JSON.stringify({
             error: 'proxy_upstream_failed',
-            message: err instanceof Error ? err.message : String(err),
+            code: rawCode,
+            message: rawMessage,
+            target,
           }))
         }
       })
