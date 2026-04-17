@@ -163,6 +163,8 @@ function handleTryOther() {
           :latency-ms="latencyMs"
           :connected-at="connectedAt"
           :counts="counts"
+          :url="url"
+          :transport="transportKind"
         />
 
         <InspectorPanels

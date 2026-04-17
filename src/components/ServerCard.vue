@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Server, Clock, Activity } from 'lucide-vue-next'
-import type { ServerSummary } from '~/composables/useMcpInspector'
+import InstallToClaudeCode from './InstallToClaudeCode.vue'
+import { suggestServerName } from '~/lib/claudeCodeInstall'
+import type { ServerSummary, TransportKind } from '~/composables/useMcpInspector'
 
 const props = defineProps<{
   server: ServerSummary | null
@@ -9,7 +11,11 @@ const props = defineProps<{
   latencyMs: number | null
   connectedAt: number | null
   counts: { tools: number; resources: number; prompts: number }
+  url: string
+  transport: TransportKind
 }>()
+
+const suggestedName = computed(() => suggestServerName(props.server?.name, props.url))
 
 const connectedAtLabel = computed(() => {
   if (!props.connectedAt) return '—'
@@ -29,12 +35,19 @@ const capabilityHint: Record<string, string> = {
 
 <template>
   <section v-if="server" class="fade-in">
-    <header class="mb-3">
-      <h2 class="text-[15px] font-semibold text-fg">Server-Info</h2>
-      <p class="text-[13px] text-fg-muted mt-0.5 max-w-2xl">
-        Basisdaten aus dem Initialize-Handshake — Name, Version und die deklarierten
-        Capabilities bestimmen, was der Server anbietet.
-      </p>
+    <header class="mb-3 flex items-start justify-between gap-4 flex-wrap">
+      <div>
+        <h2 class="text-[15px] font-semibold text-fg">Server-Info</h2>
+        <p class="text-[13px] text-fg-muted mt-0.5 max-w-2xl">
+          Basisdaten aus dem Initialize-Handshake — Name, Version und die deklarierten
+          Capabilities bestimmen, was der Server anbietet.
+        </p>
+      </div>
+      <InstallToClaudeCode
+        :url="url"
+        :transport="transport"
+        :suggested-name="suggestedName"
+      />
     </header>
 
     <div class="bg-surface border border-border rounded-lg">
