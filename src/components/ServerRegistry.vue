@@ -59,7 +59,7 @@ function initial(name: string): string {
           Öffentliche MCP-Server
         </h3>
         <p class="mt-1 text-[12px] text-fg-2">
-          Kuratierte Liste — Ein-Klick-Verbindung. Kein Setup, kein Account (sofern ohne Auth).
+          Handverlesen — jeder Eintrag ist CORS-geprüft und läuft aus dem Browser.
         </p>
       </div>
     </div>
