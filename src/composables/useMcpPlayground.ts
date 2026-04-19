@@ -14,7 +14,7 @@ import {
   type Progress,
 } from '@modelcontextprotocol/sdk/types.js'
 import { createOAuthProvider, createProxyFetch, hasOAuthTokens } from './useOAuth'
-import { elicit } from './useElicitation'
+import { elicit, resolveElicitation } from './useElicitation'
 
 export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'error'
 export type TransportKind = 'http' | 'sse'
@@ -456,6 +456,9 @@ export function useMcpPlayground() {
   async function cleanupClient() {
     const c = client.value
     client.value = null
+    // Cancel any pending elicitation dialog — otherwise it stays open over
+    // disconnect with a promise that never resolves (SDK handler is gone).
+    resolveElicitation({ action: 'cancel' })
     if (c) {
       c.onclose = noop
       c.onerror = noop

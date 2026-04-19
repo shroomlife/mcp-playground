@@ -15,7 +15,7 @@
 import type { FetchLike } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { createProxyFetch } from './useOAuth'
 
-export type AuthMode = 'none' | 'oauth' | 'bearer' | 'unknown'
+export type AuthMode = 'none' | 'oauth' | 'unknown'
 
 export interface ServerPreview {
   name?: string

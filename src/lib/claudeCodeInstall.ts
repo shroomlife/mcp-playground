@@ -120,11 +120,10 @@ export async function installToClaudeCode(
       }
     }
   } catch (err) {
-    if (!(err instanceof DOMException && err.name === 'NotFoundError')) {
-      if (err instanceof Error && err.message.includes('.mcp.json')) throw err
-      // other errors re-throw as-is
-      if (fileExisted) throw err
-    }
+    // Only "file doesn't exist" is expected here. Anything else (permission denied,
+    // filesystem error, our own JSON-parse rethrow) must propagate — otherwise we'd
+    // silently overwrite a broken-but-existing .mcp.json with {mcpServers: {..}}.
+    if (!(err instanceof DOMException && err.name === 'NotFoundError')) throw err
   }
 
   const existingServers = (existingData.mcpServers ?? {}) as Record<string, unknown>
