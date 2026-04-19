@@ -167,3 +167,65 @@ export function buildSnippet(serverName: string, entry: Record<string, unknown>)
     2,
   )
 }
+
+/**
+ * Known MCP client targets — each wraps the server entry in its own config format.
+ * Adding a new client == add another entry.
+ */
+export type ClientTargetId = 'claude-code' | 'cursor' | 'vscode' | 'windsurf'
+
+export interface ClientTarget {
+  id: ClientTargetId
+  label: string
+  filePath: string
+  pathNote: string
+  docsUrl: string
+  /** Whether the Install flow can directly write via File System Access API. */
+  supportsDirectWrite: boolean
+  buildSnippet(serverName: string, entry: Record<string, unknown>): string
+}
+
+const mcpServersWrap = (name: string, entry: Record<string, unknown>) =>
+  JSON.stringify({ mcpServers: { [name]: entry } }, null, 2)
+
+const vscodeServersWrap = (name: string, entry: Record<string, unknown>) =>
+  JSON.stringify({ servers: { [name]: entry } }, null, 2)
+
+export const CLIENT_TARGETS: ClientTarget[] = [
+  {
+    id: 'claude-code',
+    label: 'Claude Code',
+    filePath: '.mcp.json',
+    pathNote: 'Im Projekt-Root. Claude Code liest es automatisch beim Start.',
+    docsUrl: 'https://docs.claude.com/en/docs/claude-code/mcp',
+    supportsDirectWrite: true,
+    buildSnippet: mcpServersWrap,
+  },
+  {
+    id: 'cursor',
+    label: 'Cursor',
+    filePath: '.cursor/mcp.json',
+    pathNote: 'Projekt-Scope. Für User-Scope: ~/.cursor/mcp.json.',
+    docsUrl: 'https://docs.cursor.com/context/mcp',
+    supportsDirectWrite: false,
+    buildSnippet: mcpServersWrap,
+  },
+  {
+    id: 'vscode',
+    label: 'VS Code',
+    filePath: '.vscode/mcp.json',
+    pathNote: 'VS Code nutzt "servers" statt "mcpServers".',
+    docsUrl: 'https://code.visualstudio.com/docs/copilot/chat/mcp-servers',
+    supportsDirectWrite: false,
+    buildSnippet: vscodeServersWrap,
+  },
+  {
+    id: 'windsurf',
+    label: 'Windsurf',
+    filePath: '~/.codeium/windsurf/mcp_config.json',
+    pathNote: 'User-Scope, alle Workspaces.',
+    docsUrl: 'https://docs.windsurf.com/windsurf/cascade/mcp',
+    supportsDirectWrite: false,
+    buildSnippet: mcpServersWrap,
+  },
+]

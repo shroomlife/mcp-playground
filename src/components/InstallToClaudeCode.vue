@@ -31,7 +31,8 @@ import {
   installToClaudeCode,
   sanitizeServerName,
   buildMcpEntry,
-  buildSnippet,
+  CLIENT_TARGETS,
+  type ClientTargetId,
   type ExistingFileInfo,
   type InstallResult,
 } from '~/lib/claudeCodeInstall'
@@ -41,6 +42,12 @@ const props = defineProps<{
   transport: TransportKind
   suggestedName: string
 }>()
+
+const activeClientId = ref<ClientTargetId>('claude-code')
+const activeClient = computed(() => {
+  const found = CLIENT_TARGETS.find((c) => c.id === activeClientId.value)
+  return found ?? CLIENT_TARGETS[0] ?? { id: 'claude-code' as ClientTargetId, label: 'Claude Code', filePath: '.mcp.json', pathNote: '', supportsDirectWrite: true, buildSnippet: () => '{}' }
+})
 
 type Phase = 'idle' | 'picking' | 'picked' | 'writing' | 'success' | 'error'
 
@@ -57,7 +64,7 @@ const supported = isDirectoryPickerSupported()
 
 const entry = computed(() => buildMcpEntry(props.url, props.transport))
 const snippet = computed(() =>
-  buildSnippet(sanitizeServerName(serverName.value), entry.value),
+  activeClient.value.buildSnippet(sanitizeServerName(serverName.value), entry.value),
 )
 
 const nameClean = computed(() => sanitizeServerName(serverName.value))
@@ -150,11 +157,11 @@ async function copySnippet() {
         <div class="flex items-start justify-between gap-4 p-5 border-b border-border">
           <div>
             <DialogTitle class="text-[15px] font-semibold text-fg">
-              Für Claude Code installieren
+              In MCP-Client installieren
             </DialogTitle>
             <DialogDescription class="text-[13px] text-fg-muted mt-0.5">
-              Fügt diesen MCP-Server zur <code class="font-mono text-fg-2">.mcp.json</code>
-              eines Projekt­ordners hinzu.
+              Fügt diesen MCP-Server zur Config des gewählten Clients hinzu —
+              direkt schreiben oder Snippet kopieren.
             </DialogDescription>
           </div>
           <DialogClose
@@ -165,16 +172,58 @@ async function copySnippet() {
           </DialogClose>
         </div>
 
+        <!-- Client tabs -->
+        <div
+          role="tablist"
+          aria-label="MCP-Client"
+          class="flex items-center gap-1 px-3 border-b border-border bg-surface-2/50 overflow-x-auto"
+        >
+          <button
+            v-for="client in CLIENT_TARGETS"
+            :key="client.id"
+            type="button"
+            role="tab"
+            :aria-selected="activeClientId === client.id"
+            class="focus-ring h-10 px-3 text-[12.5px] font-medium transition-colors whitespace-nowrap border-b-2"
+            :class="activeClientId === client.id
+              ? 'text-fg border-accent'
+              : 'text-fg-muted border-transparent hover:text-fg'"
+            @click="activeClientId = client.id"
+          >
+            {{ client.label }}
+          </button>
+        </div>
+
         <div class="p-5 space-y-4 overflow-y-auto">
-          <!-- Feature detection fallback -->
+          <!-- Client path hint + docs link -->
+          <div class="p-3 bg-surface-2 border border-border rounded-lg text-[12px] text-fg-2 flex items-start gap-2">
+            <Info :size="14" class="text-accent shrink-0 mt-0.5" />
+            <div class="flex-1 leading-[1.5]">
+              <div>
+                Zieldatei für <strong class="font-medium text-fg">{{ activeClient.label }}</strong>:
+                <code class="font-mono text-fg">{{ activeClient.filePath }}</code>
+              </div>
+              <div class="text-fg-muted mt-0.5">{{ activeClient.pathNote }}</div>
+            </div>
+            <a
+              :href="activeClient.docsUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="focus-ring shrink-0 inline-flex items-center gap-1 text-[11px] text-accent hover:underline"
+            >
+              Docs ↗
+            </a>
+          </div>
+
+          <!-- Feature detection fallback (only for targets supporting direct-write) -->
           <div
-            v-if="!supported"
+            v-if="activeClient.supportsDirectWrite && !supported"
             class="p-3 bg-warning-soft border border-warning/30 rounded-lg text-[12.5px] text-fg-2 flex items-start gap-2"
           >
             <Info :size="14" class="text-warning shrink-0 mt-0.5" />
             <div>
               Dein Browser unterstützt keine Ordner-Auswahl (nur Chrome/Edge).
-              Kopier stattdessen diesen Snippet in deine <code class="font-mono">.mcp.json</code>:
+              Kopier stattdessen diesen Snippet unten in die Config-Datei.
             </div>
           </div>
 
@@ -231,8 +280,8 @@ async function copySnippet() {
             >{{ snippet }}</pre>
           </div>
 
-          <!-- Folder status -->
-          <div v-if="supported">
+          <!-- Folder-based direct-write flow (currently only Claude Code) -->
+          <div v-if="activeClient.supportsDirectWrite && supported">
             <div v-if="!dirHandle" class="flex flex-col gap-2">
               <button
                 type="button"

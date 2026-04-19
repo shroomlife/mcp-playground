@@ -332,8 +332,39 @@ function handleDisconnect() {
             @select="(u, t) => handleConnect(u, t, auth.headers.value)"
           />
 
-          <div class="mt-8 text-center text-[11.5px] text-fg-muted">
-            Tailwind v4 · Vue 3.5 · Reka UI · MCP SDK
+          <div class="mt-10 pt-6 border-t border-border text-center space-y-3">
+            <div class="text-[11px] uppercase tracking-wide text-fg-muted font-medium">
+              Erfahre mehr über MCP
+            </div>
+            <div class="flex items-center justify-center gap-4 flex-wrap text-[12px]">
+              <a
+                href="https://modelcontextprotocol.io/"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="focus-ring text-accent hover:underline"
+              >modelcontextprotocol.io ↗</a>
+              <a
+                href="https://modelcontextprotocol.io/specification"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="focus-ring text-accent hover:underline"
+              >Spec ↗</a>
+              <a
+                href="https://github.com/modelcontextprotocol/servers"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="focus-ring text-accent hover:underline"
+              >Server-Katalog ↗</a>
+              <a
+                href="https://github.com/shroomlife/mcp-playground"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="focus-ring text-accent hover:underline"
+              >Dieses Repo ↗</a>
+            </div>
+            <div class="text-[11px] text-fg-subtle">
+              Tailwind v4 · Vue 3.5 · Reka UI · MCP SDK
+            </div>
           </div>
         </div>
       </main>
