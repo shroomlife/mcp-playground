@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { Plug, Loader2, ArrowRight } from 'lucide-vue-next'
 import AuthConfigPanel from './AuthConfigPanel.vue'
+import ServerPreviewCard from './ServerPreviewCard.vue'
 import type { AuthHeader, ConnectionState, TransportKind } from '~/composables/useMcpPlayground'
 
 const props = defineProps<{
@@ -74,6 +75,7 @@ function useExample(ex: { url: string; transport: TransportKind }) {
         :disabled="isConnecting"
         class="focus-ring w-full h-11 px-3.5 bg-surface border border-border-strong rounded-lg font-mono text-[14px] text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none disabled:bg-surface-2 disabled:text-fg-muted transition-colors"
       />
+      <ServerPreviewCard :url="url" :skip="isConnecting" />
     </div>
 
     <!-- Transport -->
