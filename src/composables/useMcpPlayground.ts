@@ -5,6 +5,7 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { UnauthorizedError, auth as sdkAuth } from '@modelcontextprotocol/sdk/client/auth.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import {
+  ElicitRequestSchema,
   LoggingMessageNotificationSchema,
   ToolListChangedNotificationSchema,
   ResourceListChangedNotificationSchema,
@@ -12,6 +13,7 @@ import {
   type Progress,
 } from '@modelcontextprotocol/sdk/types.js'
 import { createOAuthProvider, createProxyFetch, hasOAuthTokens } from './useOAuth'
+import { elicit } from './useElicitation'
 
 export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'error'
 export type TransportKind = 'http' | 'sse'
@@ -554,6 +556,28 @@ export function useMcpPlayground() {
                 }
               })()
         pushLog(level, message, { source: 'server', logger: p.logger })
+      })
+
+      // Elicitation: the server asks the user for input mid-operation. We open
+      // a dialog via the useElicitation composable and await the user's choice.
+      c.setRequestHandler(ElicitRequestSchema, async (request) => {
+        if (client.value !== c) return { action: 'cancel' }
+        const p = request.params as {
+          mode?: 'form' | 'url'
+          message: string
+          requestedSchema?: { type: 'object'; properties: Record<string, unknown>; required?: string[] }
+          url?: string
+          elicitationId?: string
+        }
+        pushLog('notice', `Elicitation: ${p.message}`, { source: 'server' })
+        const result = await elicit({
+          mode: p.mode,
+          message: p.message,
+          requestedSchema: p.requestedSchema,
+          url: p.url,
+          elicitationId: p.elicitationId,
+        })
+        return result as { action: 'accept' | 'decline' | 'cancel'; content?: Record<string, unknown> }
       })
 
       // List-changed: auto-refresh the relevant list.

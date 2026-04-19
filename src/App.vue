@@ -12,6 +12,7 @@ import ErrorPanel from '~/components/ErrorPanel.vue'
 import AuthConfigPanel from '~/components/AuthConfigPanel.vue'
 import RecentServers from '~/components/RecentServers.vue'
 import ThemeToggle from '~/components/ThemeToggle.vue'
+import ElicitationDialog from '~/components/ElicitationDialog.vue'
 import { useTheme } from '~/composables/useTheme'
 import { consumePendingCallback } from '~/composables/useOAuth'
 import { useRouter, type RouteState } from '~/composables/useRouter'
@@ -433,6 +434,9 @@ function handleDisconnect() {
         />
       </main>
     </template>
+
+    <!-- Global: shown whenever the server sends an elicitation/create request -->
+    <ElicitationDialog />
   </div>
 </template>
 
