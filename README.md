@@ -13,32 +13,58 @@ Server ohne CORS.
 
 ## Features
 
-- 🔌 **Verbinden** per HTTP Streamable oder SSE, mit OAuth 2.1, Custom Auth-Headern oder
-  Bearer-Token
+### Verbinden & Authentifizieren
+
+- 🔌 **HTTP Streamable oder SSE** mit OAuth 2.1, Bearer-Token oder Custom Auth-Headern
 - 🔐 **OAuth 2.1 + Dynamic Client Registration** — Discovery (RFC 9728), DCR (RFC 7591),
   PKCE, Token-Refresh. Kein manuelles Client-Setup, einfach "Anmelden" klicken
-- 🔍 **Erkunden** — durchsuchbare Listen, volle Descriptions, strukturierte Parameter-Ansicht
-- ▶️ **Ausführen direkt in der Detail-Pane** — kein Modal-Hopping, Form → Run → Result → History
-  in einem Flow
-- 📡 **Live-Progress und Cancel** — Server-Progress-Notifications als Balken, Stop-Button
-  für laufende Calls
-- 🌳 **JSON-Tree-Explorer** — Ergebnisse als kollabierbarer Tree mit Such-Filter (Keys und
-  Werte), nicht mehr als JSON-Blob
-- 📝 **Server-Logs inline** — `notifications/message` vom Server gesehen, direkt im Log-Tab
-  mit SERVER/CLIENT-Kennzeichnung
-- 🔄 **Auto-Refresh** bei `list_changed`-Notifications (Tools/Resources/Prompts ändern sich zur
-  Laufzeit, Liste folgt)
-- 🧪 **Tool-History pro Tool** — "laden" lädt die alten Args zurück ins Formular
+- 🧭 **Server Card Preview** — `.well-known/mcp-server-card` + initialize-Probe schon auf
+  der Landing, bevor du überhaupt verbindest
+- 🗂️ **Server Registry** — kuratierter Katalog mit Filter (Offen / OAuth) für bekannte
+  public MCP-Server (DeepWiki, Hugging Face, Cloudflare Docs, GitHub, Linear, Notion, …)
+
+### Erkunden & Ausführen
+
+- 🔍 **Split-View Explorer** für Tools/Resources/Prompts — durchsuchbare Listen, Descriptions,
+  Schemas, Ausführung inline in der Detail-Pane
+- ▶️ **Form → Run → Result → History** in einem Flow — kein Modal-Hopping
+- 📡 **Live-Progress & Cancel** — Server-Progress-Notifications als Balken, Stop-Button für
+  laufende Calls (via AbortController)
+- 🌳 **3-Modi Result-Viewer** — Pretty (gerenderte Content-Blocks) / Explorer (Tree mit
+  Such-Filter) / Raw (JSON-Text + Copy). Default wechselt automatisch auf Explorer bei
+  JSON-Payloads
+- 🧪 **Tool-History pro Tool** — alte Args per Klick zurück ins Formular laden
 - 🗂️ **URI-Templates** (`/users/{id}`) mit automatischen Platzhalter-Inputs
-- 🔖 **URL-Routing** — jeder Server hat eine eigene URL (`/s/mcp.deepwiki.com/mcp`),
-  Browser-Back/Forward funktioniert natürlich, URLs sind shareable
-- 📚 **Server-History** — zuletzt verbundene Server auf der Startseite, ein Klick reicht
+
+### Next-Level
+
+- 🔗 **Recipe-URLs** — "Share"-Button auf jedem Tool erzeugt eine URL mit vorgefüllten
+  Args (`#/s/<url>?run=toolName&args=<b64>`). Empfänger kommt mit Formular schon befüllt an
+- 📻 **JSON-RPC Wire-Trace Panel** — jede Request/Response/Error/Notification inkl. rpc-id,
+  Richtung, Method, Size, Timestamp. Durchsuchbar, ein-/ausklappbar
+- ✏️ **Manual JSON-RPC Sender** — beliebige Methoden manuell ansteuern (ping, tools/call,
+  logging/setLevel, completion/complete, …) mit Methoden-Autocomplete
+- 💬 **Elicitation-Support** — MCP-Elicitation-Requests werden als Dialog angezeigt
+  (Form + URL-Mode), Antwort geht zurück an den Server
+- 💾 **Saved Fixtures** — Tool-Calls als Presets speichern und per Klick replayen
+- 📝 **Server-Logs inline** — `notifications/message` mit SERVER/CLIENT-Kennzeichnung
+- 🔄 **Auto-Refresh** bei `list_changed`-Notifications
+
+### Install & Deploy
+
+- 📦 **Multi-Client Install** — Claude Code, Cursor, VS Code, Windsurf. Für Claude Code
+  direktes Schreiben in `.mcp.json` via File-System-Access-API, sonst Snippet-Copy
+- 🔖 **URL-Routing** — jeder Server hat eine eigene URL (`#/s/mcp.deepwiki.com/mcp`),
+  Browser-Back/Forward funktioniert, URLs sind shareable
+- 📚 **Zuletzt verbunden** — Server-History (cross-tab, localStorage)
+
+### DX / UX
+
 - 🌓 **Dark Mode** mit System-Hint, Toggle-Button, persistiert pro Browser
 - 💾 **Session-Persistenz** — Tab, Selection, Suche bleiben beim F5 erhalten
   (`sessionStorage`, stirbt mit dem Tab)
-- 🔐 **SSRF-gehärteter Dev-Proxy** — Cloud-Metadata-Blocks, strikte Header-Kontrolle, Connect-Timeout
-- 📦 **Install-to-Claude-Code** — schreibt den verifizierten MCP-Server direkt in die
-  `.mcp.json` eines lokalen Projektordners
+- 🔐 **SSRF-gehärteter Dev-Proxy** — Cloud-Metadata-Blocks, strikte Header-Kontrolle,
+  Connect-Timeout. Nur für `bun run dev`
 
 ## Quick Start
 
