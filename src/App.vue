@@ -44,6 +44,7 @@ const {
   getPrompt,
   beginOAuth,
   traceEntries,
+  sendCustomRequest,
 } = playground
 
 function handleBeginOAuth(nextUrl: string, transport: TransportKind) {
@@ -431,6 +432,7 @@ function handleDisconnect() {
           :run-tool="callTool"
           :run-prompt="getPrompt"
           :read-resource="readResource"
+          :send-custom-request="sendCustomRequest"
         />
       </main>
     </template>

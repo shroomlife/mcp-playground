@@ -4,6 +4,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { UnauthorizedError, auth as sdkAuth } from '@modelcontextprotocol/sdk/client/auth.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
+import { z } from 'zod'
 import {
   ElicitRequestSchema,
   LoggingMessageNotificationSchema,
@@ -1037,6 +1038,34 @@ export function useMcpPlayground() {
   }
 
   /**
+   * Power-user escape hatch: fire an arbitrary JSON-RPC request at the server.
+   * The trace panel captures it alongside everything else.
+   */
+  async function sendCustomRequest(
+    method: string,
+    params: unknown,
+  ): Promise<{ result?: unknown; error?: { code?: number; message?: string; data?: unknown } }> {
+    const c = client.value
+    if (!c) throw new Error('Nicht verbunden')
+    try {
+      const result = (await c.request(
+        { method, params: params as Record<string, unknown> | undefined },
+        z.unknown(),
+      )) as unknown
+      return { result }
+    } catch (err) {
+      const e = err as { code?: number; message?: string; data?: unknown }
+      return {
+        error: {
+          code: typeof e.code === 'number' ? e.code : undefined,
+          message: typeof e.message === 'string' ? e.message : String(err),
+          data: e.data,
+        },
+      }
+    }
+  }
+
+  /**
    * Explicitly begin the OAuth flow for a target MCP URL. The SDK does discovery + DCR +
    * builds the authorization URL and then invokes `provider.redirectToAuthorization` —
    * which navigates the browser to the provider. On return, `consumePendingCallback` picks
@@ -1108,5 +1137,6 @@ export function useMcpPlayground() {
     getPrompt,
     toolHistory,
     traceEntries,
+    sendCustomRequest,
   }
 }

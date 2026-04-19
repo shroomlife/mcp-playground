@@ -37,6 +37,10 @@ defineProps<{
     options?: CallOptions,
   ) => Promise<CallHistoryEntry>
   readResource: (uri: string, options?: CallOptions) => Promise<CallHistoryEntry>
+  sendCustomRequest: (
+    method: string,
+    params: unknown,
+  ) => Promise<{ result?: unknown; error?: { code?: number; message?: string; data?: unknown } }>
 }>()
 
 const session = useSessionState()
@@ -163,7 +167,11 @@ function formatTime(at: number) {
       </TabsContent>
 
       <TabsContent value="rpc" class="focus:outline-none">
-        <RpcTracePanel :entries="traceEntries" />
+        <RpcTracePanel
+          :entries="traceEntries"
+          :is-connected="isConnected"
+          :send-custom-request="sendCustomRequest"
+        />
       </TabsContent>
 
       <TabsContent value="log" class="focus:outline-none">
