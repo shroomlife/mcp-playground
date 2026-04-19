@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { TabsRoot, TabsList, TabsTrigger, TabsContent } from 'reka-ui'
-import { Wrench, FileText, MessageSquareText, ScrollText } from 'lucide-vue-next'
+import { Wrench, FileText, MessageSquareText, ScrollText, Radio } from 'lucide-vue-next'
 import ToolExplorer from './ToolExplorer.vue'
 import ResourceExplorer from './ResourceExplorer.vue'
 import PromptExplorer from './PromptExplorer.vue'
+import RpcTracePanel from './RpcTracePanel.vue'
 import { useSessionState } from '~/composables/useSessionState'
 import type {
   CallHistoryEntry,
@@ -13,6 +14,7 @@ import type {
   McpResource,
   McpResourceTemplate,
   McpTool,
+  TraceEntry,
 } from '~/composables/useMcpPlayground'
 
 defineProps<{
@@ -22,6 +24,7 @@ defineProps<{
   prompts: McpPrompt[]
   log: LogEntry[]
   callHistory: CallHistoryEntry[]
+  traceEntries: TraceEntry[]
   isConnected: boolean
   runTool: (
     name: string,
@@ -102,8 +105,22 @@ function formatTime(at: number) {
           />
         </TabsTrigger>
         <TabsTrigger
-          value="log"
+          value="rpc"
           class="focus-ring relative flex items-center gap-2 px-5 py-3 text-[13px] font-medium text-fg-muted data-[state=active]:text-fg data-[state=active]:bg-surface transition-colors ml-auto"
+        >
+          <Radio :size="14" :stroke-width="1.75" />
+          <span>RPC</span>
+          <span class="font-mono text-[11px] tabular-nums text-fg-muted">
+            {{ traceEntries.length }}
+          </span>
+          <span
+            v-if="tab === 'rpc'"
+            class="absolute inset-x-4 -bottom-px h-[2px] bg-accent rounded-full"
+          />
+        </TabsTrigger>
+        <TabsTrigger
+          value="log"
+          class="focus-ring relative flex items-center gap-2 px-5 py-3 text-[13px] font-medium text-fg-muted data-[state=active]:text-fg data-[state=active]:bg-surface transition-colors"
         >
           <ScrollText :size="14" :stroke-width="1.75" />
           <span>Log</span>
@@ -143,6 +160,10 @@ function formatTime(at: number) {
           :is-connected="isConnected"
           :run-prompt="runPrompt"
         />
+      </TabsContent>
+
+      <TabsContent value="rpc" class="focus:outline-none">
+        <RpcTracePanel :entries="traceEntries" />
       </TabsContent>
 
       <TabsContent value="log" class="focus:outline-none">

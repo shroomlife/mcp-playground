@@ -42,6 +42,7 @@ const {
   readResource,
   getPrompt,
   beginOAuth,
+  traceEntries,
 } = playground
 
 function handleBeginOAuth(nextUrl: string, transport: TransportKind) {
@@ -424,6 +425,7 @@ function handleDisconnect() {
           :prompts="prompts"
           :log="log"
           :call-history="callHistory"
+          :trace-entries="traceEntries"
           :is-connected="isConnected"
           :run-tool="callTool"
           :run-prompt="getPrompt"

@@ -3,6 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { UnauthorizedError, auth as sdkAuth } from '@modelcontextprotocol/sdk/client/auth.js'
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import {
   LoggingMessageNotificationSchema,
   ToolListChangedNotificationSchema,
@@ -72,6 +73,24 @@ export interface LogEntry {
 export interface CallOptions {
   signal?: AbortSignal
   onProgress?: (progress: Progress) => void
+}
+
+export type TraceDirection = 'outgoing' | 'incoming'
+export type TraceKind = 'request' | 'response' | 'notification' | 'error'
+
+export interface TraceEntry {
+  id: number
+  at: number
+  direction: TraceDirection
+  kind: TraceKind
+  /** JSON-RPC id, when the message had one (requests + responses). */
+  rpcId?: string | number
+  /** `tools/call`, `notifications/message`, etc. Unknown for responses (paired by rpcId). */
+  method?: string
+  params?: unknown
+  result?: unknown
+  error?: unknown
+  sizeBytes: number
 }
 
 export interface AuthHeader {
@@ -296,12 +315,94 @@ export function useMcpPlayground() {
   const log = ref<LogEntry[]>([])
   const callHistory = shallowRef<CallHistoryEntry[]>([])
   const activeAuthHeaders = shallowRef<AuthHeader[]>([])
+  const traceEntries = shallowRef<TraceEntry[]>([])
 
   const client = shallowRef<Client | null>(null)
   let logCounter = 0
   let historyCounter = 0
+  let traceCounter = 0
 
   const HISTORY_LIMIT = 50
+  const TRACE_LIMIT = 300
+
+  function pushTrace(entry: Omit<TraceEntry, 'id'>): void {
+    traceCounter += 1
+    traceEntries.value = [
+      { id: traceCounter, ...entry },
+      ...traceEntries.value,
+    ].slice(0, TRACE_LIMIT)
+  }
+
+  function byteSize(value: unknown): number {
+    try {
+      return new TextEncoder().encode(JSON.stringify(value)).length
+    } catch {
+      return 0
+    }
+  }
+
+  /** Wrap a transport so every inbound+outbound JSON-RPC message is captured in `traceEntries`. */
+  function attachTraceCapture(transport: Transport): void {
+    const originalSend = transport.send.bind(transport)
+    transport.send = async (message, options) => {
+      const msg = message as Record<string, unknown>
+      const rpcId = msg.id as string | number | undefined
+      const method = msg.method as string | undefined
+      if (method) {
+        pushTrace({
+          at: Date.now(),
+          direction: 'outgoing',
+          kind: rpcId !== undefined ? 'request' : 'notification',
+          rpcId,
+          method,
+          params: msg.params,
+          sizeBytes: byteSize(message),
+        })
+      }
+      return originalSend(message, options)
+    }
+
+    const originalOnMessage = transport.onmessage
+    transport.onmessage = (message, extra) => {
+      const msg = message as Record<string, unknown>
+      const rpcId = msg.id as string | number | undefined
+      const method = msg.method as string | undefined
+      if (method && rpcId === undefined) {
+        pushTrace({
+          at: Date.now(),
+          direction: 'incoming',
+          kind: 'notification',
+          method,
+          params: msg.params,
+          sizeBytes: byteSize(message),
+        })
+      } else if (rpcId !== undefined) {
+        if ('result' in msg || 'error' in msg) {
+          pushTrace({
+            at: Date.now(),
+            direction: 'incoming',
+            kind: msg.error !== undefined ? 'error' : 'response',
+            rpcId,
+            result: msg.result,
+            error: msg.error,
+            sizeBytes: byteSize(message),
+          })
+        } else if (method) {
+          // Server-initiated request (elicitation, sampling, …)
+          pushTrace({
+            at: Date.now(),
+            direction: 'incoming',
+            kind: 'request',
+            rpcId,
+            method,
+            params: msg.params,
+            sizeBytes: byteSize(message),
+          })
+        }
+      }
+      originalOnMessage?.(message, extra)
+    }
+  }
 
   function pushHistory(entry: Omit<CallHistoryEntry, 'id'>): CallHistoryEntry {
     historyCounter += 1
@@ -422,6 +523,10 @@ export function useMcpPlayground() {
         await transport.finishAuth(authorizationCode)
         pushLog('success', 'OAuth abgeschlossen — Tokens gespeichert')
       }
+
+      // Start with an empty trace per connection, then wire the capture hook.
+      traceEntries.value = []
+      attachTraceCapture(transport)
 
       const c = new Client(
         { name: 'mcp-playground', version: '0.1.0' },
@@ -978,5 +1083,6 @@ export function useMcpPlayground() {
     readResource,
     getPrompt,
     toolHistory,
+    traceEntries,
   }
 }
