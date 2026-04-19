@@ -11,6 +11,7 @@ import InspectorPanels from '~/components/InspectorPanels.vue'
 import ErrorPanel from '~/components/ErrorPanel.vue'
 import AuthConfigPanel from '~/components/AuthConfigPanel.vue'
 import RecentServers from '~/components/RecentServers.vue'
+import ServerRegistry from '~/components/ServerRegistry.vue'
 import ThemeToggle from '~/components/ThemeToggle.vue'
 import ElicitationDialog from '~/components/ElicitationDialog.vue'
 import { useTheme } from '~/composables/useTheme'
@@ -332,6 +333,10 @@ function handleDisconnect() {
           </Transition>
 
           <RecentServers
+            @select="(u, t) => handleConnect(u, t, auth.headers.value)"
+          />
+
+          <ServerRegistry
             @select="(u, t) => handleConnect(u, t, auth.headers.value)"
           />
 

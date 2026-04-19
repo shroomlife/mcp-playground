@@ -70,6 +70,7 @@ src/
     ConnectionForm.vue        # URL + Transport-Wahl + Auth + Submit (Landing)
     AuthConfigPanel.vue       # OAuth Login/Logout + Bearer + Custom-Header Eingabe
     RecentServers.vue         # "Zuletzt verbunden" Liste auf Landing (aus useServerHistory)
+    ServerRegistry.vue        # Kuratierter Public-Server-Katalog auf Landing (Filter + Auth-Badges)
     ConnectedHeader.vue       # Sticky Server-Strip nach Handshake
     ServerInstructions.vue    # Dismissible Banner für server.instructions
     ThemeToggle.vue           # Mond/Sonne-Button, bindet useTheme
@@ -89,6 +90,8 @@ src/
   lib/
     schemaFormHelpers.ts      # analyzeSchema / validateArgs / stripEmpty
     claudeCodeInstall.ts      # File-System-Access-API Integration
+  data/
+    public-servers.ts         # Kuratierte Liste Public MCP-Server (ServerRegistry)
 ```
 
 **Data flow:** `useMcpPlayground()` hält den gesamten Verbindungsstate als `ref`s / `shallowRef`s.
