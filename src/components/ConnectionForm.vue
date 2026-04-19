@@ -1,15 +1,25 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Plug, Loader2, ArrowRight } from 'lucide-vue-next'
-import type { ConnectionState, TransportKind } from '~/composables/useMcpInspector'
+import AuthConfigPanel from './AuthConfigPanel.vue'
+import type { AuthHeader, ConnectionState, TransportKind } from '~/composables/useMcpPlayground'
 
 const props = defineProps<{
   state: ConnectionState
   initialUrl?: string
+  authHeaders: AuthHeader[]
+  bearerToken: string
+  onBeginOAuth?: (url: string, transport: TransportKind) => void | Promise<void>
 }>()
 
 const emit = defineEmits<{
-  (e: 'connect', url: string, transport: TransportKind): void
+  connect: [url: string, transport: TransportKind, auth: AuthHeader[]]
+  'url-change': [url: string]
+  'update:bearer': [token: string]
+  'update-header': [index: number, header: AuthHeader]
+  'add-header': []
+  'remove-header': [index: number]
+  'clear-auth': []
 }>()
 
 const url = ref(props.initialUrl ?? '')
@@ -17,6 +27,16 @@ const transport = ref<TransportKind>('http')
 
 const isConnecting = computed(() => props.state === 'connecting')
 const submitDisabled = computed(() => isConnecting.value || !url.value.trim())
+
+// Session-restore: parent may receive a saved URL after mount; sync it once into the form.
+watch(
+  () => props.initialUrl,
+  (next) => {
+    if (next && !url.value) url.value = next
+  },
+)
+
+watch(url, (next) => emit('url-change', next))
 
 const examples = [
   { url: 'https://mcp.deepwiki.com/mcp', transport: 'http' as const, label: 'DeepWiki' },
@@ -26,7 +46,7 @@ const examples = [
 
 function submit() {
   if (submitDisabled.value) return
-  emit('connect', url.value.trim(), transport.value)
+  emit('connect', url.value.trim(), transport.value, props.authHeaders)
 }
 
 function useExample(ex: { url: string; transport: TransportKind }) {
@@ -37,7 +57,7 @@ function useExample(ex: { url: string; transport: TransportKind }) {
 </script>
 
 <template>
-  <form @submit.prevent="submit" class="space-y-5 fade-in">
+  <form @submit.prevent="submit" class="space-y-4 fade-in">
     <!-- URL field -->
     <div>
       <label for="mcp-url" class="block text-[12px] font-medium text-fg-2 mb-1.5">
@@ -104,6 +124,22 @@ function useExample(ex: { url: string; transport: TransportKind }) {
         </button>
       </div>
     </div>
+
+    <!-- Auth config — only meaningful once the user has a target URL, since every
+         stored credential and the OAuth probe is keyed per URL. -->
+    <AuthConfigPanel
+      v-if="url.trim()"
+      :headers="authHeaders"
+      :bearer-token="bearerToken"
+      :disabled="isConnecting"
+      :url="url"
+      :on-begin-o-auth="props.onBeginOAuth ? () => props.onBeginOAuth?.(url.trim(), transport) : undefined"
+      @update:bearer="(token) => emit('update:bearer', token)"
+      @update-header="(i, h) => emit('update-header', i, h)"
+      @add-header="emit('add-header')"
+      @remove-header="(i) => emit('remove-header', i)"
+      @clear="emit('clear-auth')"
+    />
 
     <!-- Submit -->
     <button

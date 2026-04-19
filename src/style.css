@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Class-based dark mode (overrides Tailwind v4's default media-query behavior).
+   The `.dark` class on <html> is set by useTheme — that's the source of truth. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "JetBrains Mono", Menlo, monospace;
@@ -33,6 +37,32 @@
     color-scheme: light;
   }
 
+  /* Dark theme — token overrides only, components stay unchanged. Triggered by `.dark`
+     on <html> (set by useTheme composable). The class-based toggle wins over the
+     system hint: system dark preference only flips the initial value; user choice
+     persists in localStorage and overrides. */
+  :root.dark {
+    --color-bg: #0b0b0d;
+    --color-surface: #151517;
+    --color-surface-2: #1d1d21;
+    --color-border: #2a2a2f;
+    --color-border-strong: #3a3a41;
+
+    --color-fg: #fafafa;
+    --color-fg-2: #d4d4d8;
+    --color-fg-muted: #9a9aa3;
+    --color-fg-subtle: #64646b;
+
+    --color-accent: #60a5fa;
+    --color-accent-soft: #17233b;
+    --color-success: #4ade80;
+    --color-success-soft: #112821;
+    --color-warning: #fbbf24;
+    --color-warning-soft: #2a2114;
+    --color-danger: #f87171;
+    --color-danger-soft: #2a1616;
+  }
+
   html,
   body,
   #app {
@@ -51,6 +81,13 @@
 
   button {
     font-family: inherit;
+  }
+
+  /* Suppress Safari/WebKit native search-input clear button — we render our own X */
+  input[type="search"]::-webkit-search-cancel-button,
+  input[type="search"]::-webkit-search-decoration {
+    -webkit-appearance: none;
+    appearance: none;
   }
 
   button:not(:disabled),
@@ -93,6 +130,37 @@
     to { opacity: 1; transform: translateY(0); }
   }
   .fade-in { animation: fade-in 200ms ease-out both; }
+
+  @keyframes indeterminate-bar {
+    0%   { transform: translateX(-120%); }
+    100% { transform: translateX(420%); }
+  }
+  .indeterminate-bar { animation: indeterminate-bar 1.4s ease-in-out infinite; }
+
+  .gradient-blobs {
+    background-image:
+      radial-gradient(60% 55% at 18% 22%, rgba(186, 210, 255, 0.55) 0%, transparent 60%),
+      radial-gradient(55% 50% at 82% 28%, rgba(255, 214, 196, 0.5) 0%, transparent 62%),
+      radial-gradient(65% 55% at 50% 88%, rgba(203, 237, 214, 0.55) 0%, transparent 60%),
+      radial-gradient(40% 35% at 90% 85%, rgba(232, 210, 255, 0.45) 0%, transparent 60%);
+  }
+  :root.dark .gradient-blobs {
+    background-image:
+      radial-gradient(60% 55% at 18% 22%, rgba(80, 130, 210, 0.35) 0%, transparent 60%),
+      radial-gradient(55% 50% at 82% 28%, rgba(210, 130, 90, 0.3) 0%, transparent 62%),
+      radial-gradient(65% 55% at 50% 88%, rgba(90, 180, 140, 0.3) 0%, transparent 60%),
+      radial-gradient(40% 35% at 90% 85%, rgba(170, 130, 210, 0.3) 0%, transparent 60%);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pulse-dot,
+    .fade-in,
+    .indeterminate-bar,
+    [data-reka-accordion-content][data-state="open"],
+    [data-reka-accordion-content][data-state="closed"] {
+      animation: none !important;
+    }
+  }
 }
 
 /* Reka UI accordion transitions */

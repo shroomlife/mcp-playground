@@ -1,4 +1,4 @@
-import type { TransportKind } from '~/composables/useMcpInspector'
+import type { TransportKind } from '~/composables/useMcpPlayground'
 
 export interface McpJsonFile {
   mcpServers?: Record<string, unknown>
@@ -61,7 +61,7 @@ export async function pickProjectDirectory(): Promise<FileSystemDirectoryHandle>
   }
   return window.showDirectoryPicker({
     mode: 'readwrite',
-    id: 'mcp-inspector-project',
+    id: 'mcp-playground-project',
     startIn: 'documents',
   })
 }

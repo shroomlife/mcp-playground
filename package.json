@@ -1,5 +1,5 @@
 {
-  "name": "mcp-inspector",
+  "name": "mcp-playground",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -7,7 +7,17 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "prepare": "simple-git-hooks"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "bunx lint-staged && bun run typecheck"
+  },
+  "lint-staged": {
+    "*.{ts,vue}": "eslint --fix",
+    "*.{js,json,md,yml,yaml,css}": []
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.0",
@@ -19,9 +29,18 @@
     "@tailwindcss/vite": "^4.0.0",
     "@types/node": "^22.10.0",
     "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/eslint-config-typescript": "^14",
+    "eslint": "^10",
+    "eslint-plugin-vue": "^10",
+    "globals": "^15",
+    "jiti": "^2",
+    "lint-staged": "^16.4.0",
+    "simple-git-hooks": "^2.13.1",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.0",
+    "typescript-eslint": "^8",
     "vite": "^6.0.0",
+    "vue-eslint-parser": "^10",
     "vue-tsc": "^2.2.0"
   }
 }

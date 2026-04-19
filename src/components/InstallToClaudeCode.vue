@@ -23,7 +23,7 @@ import {
   X,
   Info,
 } from 'lucide-vue-next'
-import type { TransportKind } from '~/composables/useMcpInspector'
+import type { TransportKind } from '~/composables/useMcpPlayground'
 import {
   isDirectoryPickerSupported,
   pickProjectDirectory,
@@ -245,7 +245,7 @@ async function copySnippet() {
                 Projektordner wählen
               </button>
               <p class="text-[11.5px] text-fg-muted text-center">
-                Browser öffnet den Windows-Ordner-Dialog. Der Inspector lädt nichts hoch —
+                Browser öffnet den Windows-Ordner-Dialog. Der Playground lädt nichts hoch —
                 alles passiert lokal.
               </p>
             </div>

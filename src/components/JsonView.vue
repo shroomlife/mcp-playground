@@ -1,77 +1,98 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ChevronRight, ChevronDown, Copy, Check } from 'lucide-vue-next'
+import { Search, X, Copy, Check } from 'lucide-vue-next'
+import JsonNode from './JsonNode.vue'
 
+// Existing call sites pass `maxLines` / `collapsible`; we kept the tree view as a
+// drop-in replacement and ignore the old text-mode props (they made sense for the
+// prior <pre> renderer but don't map to a tree).
 const props = withDefaults(
   defineProps<{
     value: unknown
+    initiallyExpanded?: boolean
+    searchable?: boolean
     maxLines?: number
     collapsible?: boolean
   }>(),
-  { maxLines: 40, collapsible: true },
+  { initiallyExpanded: true, searchable: true, maxLines: undefined, collapsible: true },
 )
 
-const pretty = computed(() => {
+const search = ref('')
+
+// Escape the user input so arbitrary characters don't build a malicious regex.
+const matchRegex = computed<RegExp | null>(() => {
+  const q = search.value.trim()
+  if (!q) return null
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   try {
-    return JSON.stringify(props.value, null, 2)
+    return new RegExp(escaped, 'i')
   } catch {
-    return String(props.value)
+    return null
   }
-})
-
-const lines = computed(() => pretty.value.split('\n'))
-const isLong = computed(() => lines.value.length > props.maxLines)
-const expanded = ref(false)
-
-const display = computed(() => {
-  if (!isLong.value || expanded.value) return pretty.value
-  return lines.value.slice(0, props.maxLines).join('\n')
 })
 
 const copied = ref(false)
 let copyTimer: ReturnType<typeof setTimeout> | null = null
 
-async function copy() {
+async function copyAll() {
   try {
-    await navigator.clipboard.writeText(pretty.value)
+    const text = JSON.stringify(props.value, null, 2)
+    await navigator.clipboard.writeText(text)
     copied.value = true
     if (copyTimer) clearTimeout(copyTimer)
-    copyTimer = setTimeout(() => { copied.value = false }, 1200)
+    copyTimer = setTimeout(() => {
+      copied.value = false
+    }, 1200)
   } catch {
-    // ignore — clipboard might be unavailable
+    // clipboard unavailable — ignore
   }
+}
+
+function clearSearch() {
+  search.value = ''
 }
 </script>
 
 <template>
-  <div class="relative group">
-    <pre
-      class="font-mono text-[12px] leading-[1.6] whitespace-pre-wrap break-words text-fg-2 bg-surface-2 border border-border rounded-md px-3 py-2.5 overflow-auto"
-    >{{ display }}<span v-if="isLong && !expanded" class="text-fg-muted">
-… {{ lines.length - maxLines }} weitere Zeilen</span></pre>
-
-    <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+  <div class="bg-surface-2 border border-border rounded-md overflow-hidden">
+    <div v-if="searchable" class="flex items-center gap-2 px-2.5 py-1.5 border-b border-border bg-surface">
+      <Search :size="12" class="text-fg-muted shrink-0" />
+      <input
+        v-model="search"
+        type="search"
+        placeholder="Filter: Schlüssel oder Wert"
+        spellcheck="false"
+        autocomplete="off"
+        aria-label="JSON durchsuchen"
+        class="flex-1 bg-transparent text-[12px] text-fg placeholder:text-fg-muted focus:outline-none font-mono"
+      />
       <button
-        v-if="collapsible && isLong"
+        v-if="search"
         type="button"
-        @click="expanded = !expanded"
-        class="focus-ring flex items-center gap-1 px-2 py-1 text-[11px] bg-surface border border-border rounded text-fg-2 hover:text-fg hover:border-border-strong"
-        :aria-label="expanded ? 'Einklappen' : 'Ausklappen'"
+        class="focus-ring shrink-0 p-1 text-fg-muted hover:text-fg rounded"
+        aria-label="Filter leeren"
+        @click="clearSearch"
       >
-        <ChevronDown v-if="expanded" :size="12" />
-        <ChevronRight v-else :size="12" />
-        {{ expanded ? 'weniger' : 'alles' }}
+        <X :size="11" />
       </button>
       <button
         type="button"
-        @click="copy"
-        class="focus-ring flex items-center gap-1 px-2 py-1 text-[11px] bg-surface border border-border rounded text-fg-2 hover:text-fg hover:border-border-strong"
-        aria-label="JSON kopieren"
+        class="focus-ring shrink-0 inline-flex items-center gap-1 h-6 px-2 rounded text-[10.5px] font-medium text-fg-muted hover:text-fg hover:bg-surface-2 transition-colors"
+        title="Gesamtes JSON kopieren"
+        @click="copyAll"
       >
-        <Check v-if="copied" :size="12" class="text-success" />
-        <Copy v-else :size="12" />
-        {{ copied ? 'kopiert' : 'kopieren' }}
+        <Check v-if="copied" :size="11" class="text-success" />
+        <Copy v-else :size="11" />
+        {{ copied ? 'kopiert' : 'JSON' }}
       </button>
+    </div>
+    <div class="px-2 py-1.5 overflow-auto max-h-[480px]">
+      <JsonNode
+        :value="value"
+        :match-regex="matchRegex"
+        :initially-expanded="initiallyExpanded"
+        :depth="0"
+      />
     </div>
   </div>
 </template>
