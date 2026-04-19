@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, useTemplateRef } from 'vue'
-import { Play, Loader2, RotateCcw, Clock, ArrowDownUp, Square } from 'lucide-vue-next'
+import { Play, Loader2, RotateCcw, Clock, ArrowDownUp, Square, Link2, Check } from 'lucide-vue-next'
 import SchemaForm from './SchemaForm.vue'
 import ToolResultView from './ToolResultView.vue'
 import JsonView from './JsonView.vue'
 import { useAbortableRun } from '~/composables/useAbortableRun'
+import { consumeRecipe } from '~/composables/useRecipeInbox'
+import { buildRecipeUrl } from '~/composables/useRouter'
+import { useSessionState } from '~/composables/useSessionState'
 import {
   analyzeSchema,
   getDefaultArgs,
@@ -35,10 +38,34 @@ const analysis = computed(() => analyzeSchema(props.tool.inputSchema))
 const paramCount = computed(() => analysis.value.fields.length)
 const requiredCount = computed(() => analysis.value.fields.filter((f) => f.required).length)
 
-const args = ref<Record<string, unknown>>(getDefaultArgs(props.tool.inputSchema))
+// Recipe-URL support: if the user arrived via a share-link and the stashed recipe
+// targets this tool, consume its args instead of filling with schema defaults.
+const recipeArgs = consumeRecipe(props.tool.name)
+const args = ref<Record<string, unknown>>(
+  recipeArgs ?? getDefaultArgs(props.tool.inputSchema),
+)
 const validationErrors = ref<ValidationError[]>([])
 const jsonAllValid = ref(true)
 const lastEntry = ref<CallHistoryEntry | null>(null)
+
+const session = useSessionState()
+const recipeCopied = ref(false)
+let recipeCopyTimer: ReturnType<typeof setTimeout> | null = null
+
+async function shareRecipe() {
+  const serverUrl = session.url.value
+  if (!serverUrl) return
+  const url = buildRecipeUrl(serverUrl, session.transport.value, props.tool.name, stripEmpty(args.value))
+  if (!url) return
+  try {
+    await navigator.clipboard.writeText(url)
+    recipeCopied.value = true
+    if (recipeCopyTimer) clearTimeout(recipeCopyTimer)
+    recipeCopyTimer = setTimeout(() => (recipeCopied.value = false), 1500)
+  } catch {
+    // clipboard unavailable — ignore
+  }
+}
 
 const { running, progress, progressPercent, run, cancel } = useAbortableRun<CallHistoryEntry>()
 
@@ -122,6 +149,16 @@ function formatTime(at: number): string {
           <span v-if="paramCount > 0">
             {{ paramCount }} · {{ requiredCount }} required
           </span>
+          <button
+            type="button"
+            class="focus-ring inline-flex items-center gap-1 text-fg-muted hover:text-fg disabled:opacity-40"
+            title="Shareable URL mit diesen Args kopieren"
+            @click="shareRecipe"
+          >
+            <Check v-if="recipeCopied" :size="11" class="text-success" />
+            <Link2 v-else :size="11" />
+            {{ recipeCopied ? 'kopiert' : 'teilen' }}
+          </button>
           <button
             v-if="paramCount > 0"
             type="button"

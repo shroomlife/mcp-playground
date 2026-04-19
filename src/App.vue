@@ -16,6 +16,7 @@ import { useTheme } from '~/composables/useTheme'
 import { consumePendingCallback } from '~/composables/useOAuth'
 import { useRouter, type RouteState } from '~/composables/useRouter'
 import { useServerHistory } from '~/composables/useServerHistory'
+import { stashRecipe } from '~/composables/useRecipeInbox'
 import type { AuthHeader, TransportKind } from '~/composables/useMcpPlayground'
 
 const playground = useMcpPlayground()
@@ -124,6 +125,15 @@ async function syncToRoute(route: RouteState, authCode?: string) {
   }
   if (route.path === 'server' && route.mcpUrl) {
     const t: TransportKind = route.transport ?? 'http'
+    const recipe = route.recipe
+    if (recipe) {
+      // Preselect the recipe's tool + stash its args for the about-to-mount ToolDetail.
+      session.toolName.value = recipe.toolName
+      session.tab.value = 'tools'
+      if (recipe.args) stashRecipe(recipe.toolName, recipe.args)
+      // Strip the recipe from the URL so browser-refresh doesn't re-apply it.
+      router.replaceWithServer(route.mcpUrl, t)
+    }
     const alreadyThere =
       state.value === 'connected' &&
       url.value === route.mcpUrl &&

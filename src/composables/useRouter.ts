@@ -22,10 +22,58 @@ import type { TransportKind } from './useMcpPlayground'
 
 export type RoutePath = 'landing' | 'server' | 'oauth-callback'
 
+export interface RouteRecipe {
+  toolName: string
+  args?: Record<string, unknown>
+}
+
 export interface RouteState {
   path: RoutePath
   mcpUrl?: string
   transport?: TransportKind
+  /** Optional "recipe": a tool name + prefilled args carried in the hash query, so a
+   *  URL can pre-select a tool and fill the form. `?run=<tool>&args=<url-safe-base64>`. */
+  recipe?: RouteRecipe
+}
+
+function utf8ToUrlBase64(str: string): string {
+  const bytes = new TextEncoder().encode(str)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 1) {
+    binary += String.fromCharCode(bytes[i] as number)
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function urlBase64ToUtf8(encoded: string): string | null {
+  try {
+    const standard = encoded.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = standard + '==='.slice((standard.length + 3) % 4)
+    const binary = atob(padded)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
+    return new TextDecoder().decode(bytes)
+  } catch {
+    return null
+  }
+}
+
+function encodeRecipeArgs(args: Record<string, unknown>): string {
+  return utf8ToUrlBase64(JSON.stringify(args))
+}
+
+function decodeRecipeArgs(encoded: string): Record<string, unknown> | null {
+  const json = urlBase64ToUtf8(encoded)
+  if (json === null) return null
+  try {
+    const parsed = JSON.parse(json) as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>
+    }
+    return null
+  } catch {
+    return null
+  }
 }
 
 function hasComplexParts(u: URL): boolean {
@@ -64,12 +112,25 @@ function parseLocation(): RouteState {
   if (!match?.[1]) return { path: 'landing' }
   const rest = match[1]
 
+  function recipeFromParams(): RouteRecipe | undefined {
+    const toolName = params.get('run')
+    if (!toolName) return undefined
+    const argsParam = params.get('args')
+    const args = argsParam ? (decodeRecipeArgs(argsParam) ?? undefined) : undefined
+    return args ? { toolName, args } : { toolName }
+  }
+
   // Percent-encoded fallback form
   if (rest.includes('%')) {
     try {
       const decoded = decodeURIComponent(rest)
       new URL(decoded)
-      return { path: 'server', mcpUrl: decoded, transport: transportFromSearch(params) }
+      return {
+        path: 'server',
+        mcpUrl: decoded,
+        transport: transportFromSearch(params),
+        recipe: recipeFromParams(),
+      }
     } catch {
       return { path: 'landing' }
     }
@@ -82,10 +143,19 @@ function parseLocation(): RouteState {
   } catch {
     return { path: 'landing' }
   }
-  return { path: 'server', mcpUrl, transport: transportFromSearch(params) }
+  return {
+    path: 'server',
+    mcpUrl,
+    transport: transportFromSearch(params),
+    recipe: recipeFromParams(),
+  }
 }
 
-function buildServerHash(mcpUrl: string, transport: TransportKind): string {
+function buildServerHash(
+  mcpUrl: string,
+  transport: TransportKind,
+  recipe?: RouteRecipe,
+): string {
   let u: URL | null = null
   try {
     u = new URL(mcpUrl)
@@ -95,6 +165,12 @@ function buildServerHash(mcpUrl: string, transport: TransportKind): string {
 
   const params = new URLSearchParams()
   if (transport === 'sse') params.set('t', 'sse')
+  if (recipe) {
+    params.set('run', recipe.toolName)
+    if (recipe.args && Object.keys(recipe.args).length > 0) {
+      params.set('args', encodeRecipeArgs(recipe.args))
+    }
+  }
 
   if (u && !hasComplexParts(u) && (u.protocol === 'http:' || u.protocol === 'https:')) {
     if (u.protocol === 'http:') params.set('s', 'http')
@@ -107,10 +183,21 @@ function buildServerHash(mcpUrl: string, transport: TransportKind): string {
   return `#/s/${encodeURIComponent(mcpUrl)}${qs ? `?${qs}` : ''}`
 }
 
+export function buildRecipeUrl(
+  mcpUrl: string,
+  transport: TransportKind,
+  toolName: string,
+  args: Record<string, unknown>,
+): string {
+  if (typeof window === 'undefined') return ''
+  const hash = buildServerHash(mcpUrl, transport, { toolName, args })
+  return `${window.location.origin}${window.location.pathname}${hash}`
+}
+
 interface Router {
   current: Ref<RouteState>
-  navigateToServer(mcpUrl: string, transport: TransportKind): void
-  replaceWithServer(mcpUrl: string, transport: TransportKind): void
+  navigateToServer(mcpUrl: string, transport: TransportKind, recipe?: RouteRecipe): void
+  replaceWithServer(mcpUrl: string, transport: TransportKind, recipe?: RouteRecipe): void
   navigateToLanding(): void
   replaceWithLanding(): void
 }
@@ -129,18 +216,18 @@ function create(): Router {
     current.value = parseLocation()
   }
 
-  function navigateToServer(mcpUrl: string, transport: TransportKind) {
+  function navigateToServer(mcpUrl: string, transport: TransportKind, recipe?: RouteRecipe) {
     if (typeof window === 'undefined') return
-    const target = pathPrefix() + buildServerHash(mcpUrl, transport)
+    const target = pathPrefix() + buildServerHash(mcpUrl, transport, recipe)
     if (window.location.pathname + window.location.hash !== target) {
       window.history.pushState({}, '', target)
     }
     sync()
   }
 
-  function replaceWithServer(mcpUrl: string, transport: TransportKind) {
+  function replaceWithServer(mcpUrl: string, transport: TransportKind, recipe?: RouteRecipe) {
     if (typeof window === 'undefined') return
-    const target = pathPrefix() + buildServerHash(mcpUrl, transport)
+    const target = pathPrefix() + buildServerHash(mcpUrl, transport, recipe)
     window.history.replaceState({}, '', target)
     sync()
   }
