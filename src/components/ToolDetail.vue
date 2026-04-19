@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, useTemplateRef } from 'vue'
-import { Play, Loader2, RotateCcw, Clock, ArrowDownUp, Square, Link2, Check } from 'lucide-vue-next'
+import { computed, ref, toRef, useTemplateRef } from 'vue'
+import { Play, Loader2, RotateCcw, Clock, ArrowDownUp, Square, Link2, Check, Bookmark, X } from 'lucide-vue-next'
 import SchemaForm from './SchemaForm.vue'
 import ToolResultView from './ToolResultView.vue'
 import JsonView from './JsonView.vue'
@@ -8,6 +8,7 @@ import { useAbortableRun } from '~/composables/useAbortableRun'
 import { consumeRecipe } from '~/composables/useRecipeInbox'
 import { buildRecipeUrl } from '~/composables/useRouter'
 import { useSessionState } from '~/composables/useSessionState'
+import { useFixtures } from '~/composables/useFixtures'
 import {
   analyzeSchema,
   getDefaultArgs,
@@ -51,6 +52,27 @@ const lastEntry = ref<CallHistoryEntry | null>(null)
 const session = useSessionState()
 const recipeCopied = ref(false)
 let recipeCopyTimer: ReturnType<typeof setTimeout> | null = null
+
+const fixturesApi = useFixtures(toRef(session.url))
+const toolFixtures = fixturesApi.forTool(props.tool.name)
+
+function saveCurrentAsFixture() {
+  fixturesApi.add(props.tool.name, stripEmpty(args.value))
+}
+
+function loadFixture(fixture: { id: string; args: Record<string, unknown> }) {
+  args.value = { ...fixture.args }
+  formRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function fixturePreview(args: Record<string, unknown>): string {
+  try {
+    const s = JSON.stringify(args)
+    return s.length > 60 ? `${s.slice(0, 60)}…` : s
+  } catch {
+    return ''
+  }
+}
 
 async function shareRecipe() {
   const serverUrl = session.url.value
@@ -158,6 +180,16 @@ function formatTime(at: number): string {
             <Check v-if="recipeCopied" :size="11" class="text-success" />
             <Link2 v-else :size="11" />
             {{ recipeCopied ? 'kopiert' : 'teilen' }}
+          </button>
+          <button
+            type="button"
+            class="focus-ring inline-flex items-center gap-1 text-fg-muted hover:text-fg disabled:opacity-40"
+            :disabled="running"
+            title="Aktuelle Args als Fixture speichern (localStorage, pro Server)"
+            @click="saveCurrentAsFixture"
+          >
+            <Bookmark :size="11" />
+            speichern
           </button>
           <button
             v-if="paramCount > 0"
@@ -282,6 +314,52 @@ function formatTime(at: number): string {
         <JsonView :value="tool.outputSchema" :max-lines="20" />
       </div>
     </details>
+
+    <!-- Saved Fixtures for this tool -->
+    <section
+      v-if="toolFixtures.length > 0"
+      class="px-5 md:px-6 py-5 border-b border-border"
+    >
+      <div class="flex items-baseline justify-between mb-3">
+        <h4 class="text-[11px] uppercase tracking-wide text-fg-muted font-medium flex items-center gap-1.5">
+          <Bookmark :size="11" />
+          Gespeicherte Fixtures
+        </h4>
+        <span class="text-[11px] text-fg-subtle font-mono">
+          {{ toolFixtures.length }}
+        </span>
+      </div>
+      <ul class="space-y-1">
+        <li
+          v-for="fixture in toolFixtures"
+          :key="fixture.id"
+          class="group flex items-center gap-3 px-3 py-1.5 bg-surface border border-border rounded-md font-mono text-[11.5px] hover:bg-surface-2 transition-colors"
+        >
+          <span class="text-fg-muted tabular-nums w-12 shrink-0">
+            {{ formatTime(fixture.savedAt) }}
+          </span>
+          <span class="flex-1 min-w-0 truncate text-fg-2">
+            {{ fixturePreview(fixture.args) }}
+          </span>
+          <button
+            type="button"
+            class="focus-ring shrink-0 text-accent hover:underline text-[11px]"
+            title="Args ins Formular laden"
+            @click="loadFixture(fixture)"
+          >
+            laden
+          </button>
+          <button
+            type="button"
+            class="focus-ring shrink-0 p-0.5 text-fg-muted hover:text-danger opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+            aria-label="Fixture löschen"
+            @click="fixturesApi.remove(fixture.id)"
+          >
+            <X :size="11" />
+          </button>
+        </li>
+      </ul>
+    </section>
 
     <!-- History -->
     <section
