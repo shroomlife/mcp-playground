@@ -1,10 +1,71 @@
 <!doctype html>
-<html lang="en">
+<html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>◎</text></svg>" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MCP · Playground</title>
+
+    <title>MCP Playground — Browser-Tool zum Testen von Model-Context-Protocol-Servern</title>
+    <meta name="description" content="Kostenloses Open-Source-Tool, um Model-Context-Protocol-Server (MCP) direkt im Browser zu erkunden: Tools ausführen, Resources lesen, Prompts testen, OAuth 2.1 + DCR, JSON-RPC-Trace, Elicitation, Shareable Recipe-URLs." />
+    <meta name="keywords" content="MCP, Model Context Protocol, MCP Inspector, MCP Playground, MCP Client, MCP Tester, Anthropic MCP, JSON-RPC, OAuth 2.1, DCR, Dynamic Client Registration, Streamable HTTP, SSE, Claude Code, Cursor, VS Code, Windsurf" />
+    <meta name="author" content="Robin (shroomlife)" />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#6366f1" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b0b0f" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
+
+    <link rel="canonical" href="https://shroomlife.github.io/mcp-playground/" />
+
+    <!-- Favicons: inline SVG for modern browsers, PNG fallback via data URI for older clients -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%236366f1'/%3E%3Cstop offset='100%25' stop-color='%238b5cf6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23g)'/%3E%3Ccircle cx='32' cy='32' r='13' fill='none' stroke='white' stroke-width='3'/%3E%3Ccircle cx='32' cy='32' r='4' fill='white'/%3E%3C/svg%3E" />
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%236366f1'/%3E%3Cstop offset='100%25' stop-color='%238b5cf6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='180' height='180' rx='40' fill='url(%23g)'/%3E%3Ccircle cx='90' cy='90' r='38' fill='none' stroke='white' stroke-width='9'/%3E%3Ccircle cx='90' cy='90' r='12' fill='white'/%3E%3C/svg%3E" />
+
+    <!-- OpenGraph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="MCP Playground" />
+    <meta property="og:title" content="MCP Playground — Model-Context-Protocol-Server im Browser erkunden" />
+    <meta property="og:description" content="Kostenloses Open-Source-Tool für MCP-Server. Tools ausführen, Resources lesen, OAuth-Login, JSON-RPC-Trace, Shareable Recipe-URLs — alles im Browser." />
+    <meta property="og:url" content="https://shroomlife.github.io/mcp-playground/" />
+    <meta property="og:image" content="https://shroomlife.github.io/mcp-playground/og-image.svg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="MCP Playground — Browser-Client für Model Context Protocol" />
+    <meta property="og:locale" content="de_DE" />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="MCP Playground" />
+    <meta name="twitter:description" content="Browser-Tool zum Testen von Model-Context-Protocol-Servern — Open Source, kein Setup." />
+    <meta name="twitter:image" content="https://shroomlife.github.io/mcp-playground/og-image.svg" />
+    <meta name="twitter:image:alt" content="MCP Playground Logo mit Namen" />
+
+    <!-- Structured data: SoftwareApplication for rich search results -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "MCP Playground",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Web",
+        "description": "Browser-Tool zum Inspizieren und Ausprobieren von Model-Context-Protocol-Servern. Unterstützt Streamable HTTP + SSE, OAuth 2.1 mit Dynamic Client Registration, Tools, Resources, Prompts, JSON-RPC-Trace, Elicitation.",
+        "url": "https://shroomlife.github.io/mcp-playground/",
+        "license": "https://opensource.org/licenses/MIT",
+        "author": {
+          "@type": "Person",
+          "name": "Robin",
+          "url": "https://github.com/shroomlife"
+        },
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "softwareRequirements": "Moderner Browser (Chrome, Firefox, Safari, Edge)",
+        "codeRepository": "https://github.com/shroomlife/mcp-playground",
+        "programmingLanguage": ["TypeScript", "Vue"],
+        "keywords": "MCP, Model Context Protocol, JSON-RPC, OAuth, Anthropic"
+      }
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -14,6 +75,18 @@
   </head>
   <body>
     <div id="app"></div>
+    <noscript>
+      <div style="max-width: 560px; margin: 60px auto; padding: 24px; font-family: system-ui, sans-serif; line-height: 1.5; color: #333;">
+        <h1 style="margin-top: 0;">MCP Playground</h1>
+        <p>
+          Dieses Tool ist eine clientseitige Vue-Anwendung und braucht
+          aktiviertes JavaScript im Browser.
+        </p>
+        <p>
+          Code: <a href="https://github.com/shroomlife/mcp-playground">github.com/shroomlife/mcp-playground</a>
+        </p>
+      </div>
+    </noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
