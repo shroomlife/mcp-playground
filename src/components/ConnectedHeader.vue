@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, useTemplateRef } from 'vue'
 import { Activity, LogOut, KeyRound, Wrench, FileText, MessageSquareText } from 'lucide-vue-next'
 import InstallToClaudeCode from './InstallToClaudeCode.vue'
 import ThemeToggle from './ThemeToggle.vue'
@@ -30,11 +30,39 @@ const prettyUrl = computed(() => {
     return { host: props.url, path: '', scheme: '' }
   }
 })
+
+// Expose the current header height as a CSS variable so scroll-margin-top in the
+// detail panes can offset under the sticky strip — picking a tool at the bottom
+// of the list used to snap the page to a header that sat behind this one.
+// ResizeObserver covers wrap-on-mobile and the conditional capability pills row.
+const headerRef = useTemplateRef<HTMLElement>('headerRef')
+let headerResizeObserver: ResizeObserver | null = null
+
+onMounted(() => {
+  const el = headerRef.value
+  if (!el) return
+  const update = () => {
+    document.documentElement.style.setProperty(
+      '--connected-header-h',
+      `${el.offsetHeight}px`,
+    )
+  }
+  update()
+  headerResizeObserver = new ResizeObserver(update)
+  headerResizeObserver.observe(el)
+})
+
+onBeforeUnmount(() => {
+  headerResizeObserver?.disconnect()
+  headerResizeObserver = null
+  document.documentElement.style.removeProperty('--connected-header-h')
+})
 </script>
 
 <template>
   <header
     v-if="server"
+    ref="headerRef"
     class="sticky top-0 z-30 border-b border-border bg-bg/85 backdrop-blur-md"
   >
     <div class="mx-auto max-w-[1200px] px-6 md:px-10 py-3 flex items-center gap-4 flex-wrap">

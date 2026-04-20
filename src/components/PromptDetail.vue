@@ -107,7 +107,11 @@ function formatTime(at: number): string {
 </script>
 
 <template>
-  <div ref="rootRef" class="flex flex-col min-h-0">
+  <div
+    ref="rootRef"
+    class="flex flex-col min-h-0"
+    style="scroll-margin-top: calc(var(--connected-header-h, 5rem) + 0.75rem)"
+  >
     <!-- Head -->
     <header class="px-5 md:px-6 pt-5 pb-4 border-b border-border bg-surface-2/30">
       <div class="flex items-baseline gap-2 flex-wrap">
@@ -133,6 +137,7 @@ function formatTime(at: number): string {
     <form
       ref="formRef"
       class="px-5 md:px-6 py-5 border-b border-border"
+      style="scroll-margin-top: calc(var(--connected-header-h, 5rem) + 0.75rem)"
       @submit.prevent="submit"
     >
       <div class="flex items-baseline justify-between mb-3">
@@ -250,6 +255,7 @@ function formatTime(at: number): string {
       v-if="lastEntry"
       ref="resultRef"
       class="px-5 md:px-6 py-5 border-b border-border"
+      style="scroll-margin-top: calc(var(--connected-header-h, 5rem) + 0.75rem)"
     >
       <div class="flex items-baseline justify-between mb-3">
         <h4 class="text-[11px] uppercase tracking-wide text-fg-muted font-medium">
