@@ -9,8 +9,12 @@ const props = withDefaults(
     matchRegex?: RegExp | null
     initiallyExpanded?: boolean
     depth?: number
+    // Tells this node the parent wanted it opened as part of a "chain" — i.e.
+    // following the single meaningful path from the root down to the first real
+    // payload. Parent decides which children get this flag (see childAutoExpand).
+    autoExpand?: boolean
   }>(),
-  { nodeKey: undefined, matchRegex: null, initiallyExpanded: true, depth: 0 },
+  { nodeKey: undefined, matchRegex: null, initiallyExpanded: true, depth: 0, autoExpand: false },
 )
 
 defineOptions({ name: 'JsonNode' })
@@ -85,9 +89,26 @@ const primitiveColor = computed<string>(() => {
   return 'text-fg-2'
 })
 
-// Collapse by default beyond the first two levels — avoids a wall of rows on open.
-const defaultExpanded = props.depth <= 1 ? (props.initiallyExpanded ?? true) : false
-const expanded = ref(defaultExpanded)
+// MCP tool results are often {content: [{type:'text', text:'...'}]} — collapsing
+// everything past depth=1 leaves the user staring at `content`/`0` with no real
+// payload in sight. We follow a single-payload "chain" one level deeper: in an
+// object with one key we open that key; in an array we open the first item.
+// Multiple siblings mean the shape has diverged — stop so the user sees context.
+// Hard cap at depth 5 so large trees still open cleanly.
+function computeDefaultExpanded(): boolean {
+  if (props.depth === 0) return props.initiallyExpanded ?? true
+  if (props.autoExpand && props.depth <= 5) return true
+  // Fallback to the old behavior for nodes the chain didn't reach.
+  return props.depth <= 1 ? (props.initiallyExpanded ?? true) : false
+}
+const expanded = ref(computeDefaultExpanded())
+
+function childAutoExpand(idx: number): boolean {
+  if (props.depth >= 5) return false
+  if (kind.value === 'array') return idx === 0
+  if (kind.value === 'object' && childEntries.value.length === 1) return true
+  return false
+}
 
 function keyMatches(re: RegExp): boolean {
   return props.nodeKey !== undefined && re.test(String(props.nodeKey))
@@ -225,13 +246,14 @@ const primitiveHighlightClass = computed(() =>
       class="pl-[13px] border-l border-border ml-[7px]"
     >
       <JsonNode
-        v-for="entry in childEntries"
+        v-for="(entry, idx) in childEntries"
         :key="String(entry.key)"
         :value="entry.value"
         :node-key="entry.key"
         :match-regex="matchRegex"
         :depth="depth + 1"
         :initially-expanded="initiallyExpanded"
+        :auto-expand="childAutoExpand(idx)"
       />
       <div class="text-fg-muted pl-[2px]">
         {{ closeBracket }}

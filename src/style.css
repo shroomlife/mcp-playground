@@ -30,6 +30,16 @@
   --color-warning-soft: #fffbeb;
   --color-danger: #b91c1c;
   --color-danger-soft: #fef2f2;
+
+  /* Category accents — used to differentiate Tools / Resources / Prompts
+     at a glance in tabs, list icons and selected-row tints. Accent stays the
+     primary interaction colour; these read as secondary hierarchy. */
+  --color-cat-tool: #2563eb;
+  --color-cat-tool-soft: #eff6ff;
+  --color-cat-resource: #0891b2;
+  --color-cat-resource-soft: #ecfeff;
+  --color-cat-prompt: #7c3aed;
+  --color-cat-prompt-soft: #f5f3ff;
 }
 
 @layer base {
@@ -61,6 +71,13 @@
     --color-warning-soft: #2a2114;
     --color-danger: #f87171;
     --color-danger-soft: #2a1616;
+
+    --color-cat-tool: #60a5fa;
+    --color-cat-tool-soft: #17233b;
+    --color-cat-resource: #22d3ee;
+    --color-cat-resource-soft: #0e2930;
+    --color-cat-prompt: #c4b5fd;
+    --color-cat-prompt-soft: #221a3a;
   }
 
   html,

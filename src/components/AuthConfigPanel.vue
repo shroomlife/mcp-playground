@@ -18,6 +18,7 @@ import {
   LogIn,
   LogOut,
   Plus,
+  RotateCw,
   ShieldOff,
   X,
   ShieldAlert,
@@ -31,6 +32,7 @@ const props = defineProps<{
   bearerToken: string
   disabled?: boolean
   url?: string
+  canReconnect?: boolean
   onBeginOAuth?: () => void | Promise<void>
 }>()
 
@@ -41,6 +43,7 @@ const emit = defineEmits<{
   'remove-header': [index: number]
   clear: []
   'oauth-cleared': []
+  reconnect: []
 }>()
 
 // hasOAuthTokens reads sessionStorage directly — Vue can't see that. We track a
@@ -557,6 +560,28 @@ function updateValue(index: number, value: string) {
                 Header hinzufügen
               </button>
             </div>
+          </div>
+
+          <!-- Reconnect action — only meaningful in Connected view. Sits inside the
+               accordion so the compact header doesn't carry a second action button. -->
+          <div
+            v-if="canReconnect"
+            class="flex items-center justify-between gap-3 p-2.5 bg-accent-soft/40 border border-accent/20 rounded-md"
+          >
+            <p class="text-[11.5px] text-fg-2 leading-[1.4] flex-1 min-w-0">
+              Änderungen greifen erst nach einem Reconnect. Die aktuelle Verbindung
+              bleibt sonst mit den alten Credentials bestehen.
+            </p>
+            <button
+              type="button"
+              :disabled="disabled"
+              class="focus-ring shrink-0 inline-flex items-center gap-1.5 h-7 px-2.5 bg-accent text-white rounded-md text-[11px] font-medium hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Verbindung mit aktuell eingestellter Auth neu aufbauen"
+              @click="emit('reconnect')"
+            >
+              <RotateCw :size="11" />
+              Neu verbinden
+            </button>
           </div>
 
           <!-- Warning -->

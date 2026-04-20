@@ -82,18 +82,18 @@ const prettyUrl = computed(() => {
           <KeyRound :size="12" :stroke-width="2" />
           <span>Auth</span>
         </div>
-        <!-- Capability counts -->
+        <!-- Capability counts — colour-coded to match InspectorPanels tabs -->
         <div class="flex items-center gap-3 font-mono">
           <span class="flex items-center gap-1" :title="`${counts.tools} Tools`">
-            <Wrench :size="11" :stroke-width="1.75" class="text-accent" />
+            <Wrench :size="11" :stroke-width="1.75" class="text-cat-tool" />
             <span class="tabular-nums">{{ counts.tools }}</span>
           </span>
           <span class="flex items-center gap-1" :title="`${counts.resources} Resources`">
-            <FileText :size="11" :stroke-width="1.75" class="text-accent" />
+            <FileText :size="11" :stroke-width="1.75" class="text-cat-resource" />
             <span class="tabular-nums">{{ counts.resources }}</span>
           </span>
           <span class="flex items-center gap-1" :title="`${counts.prompts} Prompts`">
-            <MessageSquareText :size="11" :stroke-width="1.75" class="text-accent" />
+            <MessageSquareText :size="11" :stroke-width="1.75" class="text-cat-prompt" />
             <span class="tabular-nums">{{ counts.prompts }}</span>
           </span>
         </div>

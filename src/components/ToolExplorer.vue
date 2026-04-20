@@ -144,7 +144,7 @@ watch(
 
   <div
     v-else
-    class="grid grid-cols-1 md:grid-cols-[minmax(280px,360px)_1fr] divide-y md:divide-y-0 md:divide-x divide-border min-h-[560px]"
+    class="grid grid-cols-1 md:grid-cols-[minmax(320px,420px)_1fr] divide-y md:divide-y-0 md:divide-x divide-border min-h-[560px]"
   >
     <!-- List column -->
     <div class="flex flex-col min-h-0">
@@ -196,7 +196,7 @@ watch(
             role="option"
             :data-tool-index="i"
             :aria-selected="selectedTool?.name === tool.name"
-            class="focus-ring w-full text-left px-4 py-2.5 border-b border-border flex items-start gap-2.5 hover:bg-surface-2 transition-colors data-[selected=true]:bg-accent-soft/50 data-[selected=true]:border-accent/20"
+            class="focus-ring w-full text-left px-4 py-2.5 border-b border-border flex items-start gap-2.5 hover:bg-surface-2 transition-colors data-[selected=true]:bg-cat-tool-soft/60 data-[selected=true]:border-cat-tool/25"
             :data-selected="selectedTool?.name === tool.name ? 'true' : 'false'"
             @click="selectTool(tool)"
             @keydown="onListKey($event, i)"
@@ -205,7 +205,7 @@ watch(
               :size="13"
               :stroke-width="1.75"
               class="shrink-0 mt-0.5"
-              :class="selectedTool?.name === tool.name ? 'text-accent' : 'text-fg-muted'"
+              :class="selectedTool?.name === tool.name ? 'text-cat-tool' : 'text-fg-muted'"
             />
             <div class="flex-1 min-w-0">
               <div class="font-mono text-[12.5px] font-medium text-fg truncate">

@@ -70,42 +70,57 @@ function formatTime(at: number) {
           value="tools"
           class="focus-ring relative flex items-center gap-2 px-5 py-3 text-[13px] font-medium text-fg-muted data-[state=active]:text-fg data-[state=active]:bg-surface transition-colors"
         >
-          <Wrench :size="14" :stroke-width="1.75" />
+          <Wrench :size="14" :stroke-width="1.75" class="text-cat-tool" />
           <span>Tools</span>
-          <span class="font-mono text-[11px] tabular-nums text-fg-muted">
+          <span
+            class="font-mono text-[11px] tabular-nums px-1.5 rounded"
+            :class="tab === 'tools'
+              ? 'bg-cat-tool-soft text-cat-tool'
+              : 'text-fg-muted'"
+          >
             {{ tools.length }}
           </span>
           <span
             v-if="tab === 'tools'"
-            class="absolute inset-x-4 -bottom-px h-[2px] bg-accent rounded-full"
+            class="absolute inset-x-4 -bottom-px h-[2px] bg-cat-tool rounded-full"
           />
         </TabsTrigger>
         <TabsTrigger
           value="resources"
           class="focus-ring relative flex items-center gap-2 px-5 py-3 text-[13px] font-medium text-fg-muted data-[state=active]:text-fg data-[state=active]:bg-surface transition-colors"
         >
-          <FileText :size="14" :stroke-width="1.75" />
+          <FileText :size="14" :stroke-width="1.75" class="text-cat-resource" />
           <span>Resources</span>
-          <span class="font-mono text-[11px] tabular-nums text-fg-muted">
+          <span
+            class="font-mono text-[11px] tabular-nums px-1.5 rounded"
+            :class="tab === 'resources'
+              ? 'bg-cat-resource-soft text-cat-resource'
+              : 'text-fg-muted'"
+          >
             {{ resources.length + resourceTemplates.length }}
           </span>
           <span
             v-if="tab === 'resources'"
-            class="absolute inset-x-4 -bottom-px h-[2px] bg-accent rounded-full"
+            class="absolute inset-x-4 -bottom-px h-[2px] bg-cat-resource rounded-full"
           />
         </TabsTrigger>
         <TabsTrigger
           value="prompts"
           class="focus-ring relative flex items-center gap-2 px-5 py-3 text-[13px] font-medium text-fg-muted data-[state=active]:text-fg data-[state=active]:bg-surface transition-colors"
         >
-          <MessageSquareText :size="14" :stroke-width="1.75" />
+          <MessageSquareText :size="14" :stroke-width="1.75" class="text-cat-prompt" />
           <span>Prompts</span>
-          <span class="font-mono text-[11px] tabular-nums text-fg-muted">
+          <span
+            class="font-mono text-[11px] tabular-nums px-1.5 rounded"
+            :class="tab === 'prompts'
+              ? 'bg-cat-prompt-soft text-cat-prompt'
+              : 'text-fg-muted'"
+          >
             {{ prompts.length }}
           </span>
           <span
             v-if="tab === 'prompts'"
-            class="absolute inset-x-4 -bottom-px h-[2px] bg-accent rounded-full"
+            class="absolute inset-x-4 -bottom-px h-[2px] bg-cat-prompt rounded-full"
           />
         </TabsTrigger>
         <TabsTrigger

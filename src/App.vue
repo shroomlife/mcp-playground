@@ -398,32 +398,21 @@ function handleDisconnect() {
         />
 
         <!-- Auth nachträglich setzen / OAuth-Flow starten, ohne Disconnect -->
-        <div class="space-y-2">
-          <AuthConfigPanel
-            :headers="auth.headers.value"
-            :bearer-token="bearerToken"
-            :disabled="state === 'connecting'"
-            :url="url"
-            :on-begin-o-auth="() => handleBeginOAuth(url, transportKind)"
-            @update:bearer="(t: string) => auth.setBearer(t)"
-            @update-header="(i: number, h: AuthHeader) => auth.updateHeader(i, h)"
-            @add-header="() => auth.addHeader()"
-            @remove-header="(i: number) => auth.removeHeader(i)"
-            @clear="() => auth.clear()"
-            @oauth-cleared="handleAuthReconnect"
-          />
-          <div class="flex justify-end">
-            <button
-              type="button"
-              :disabled="state === 'connecting'"
-              class="focus-ring inline-flex items-center gap-1.5 h-8 px-3 text-[11.5px] text-fg-muted hover:text-fg disabled:opacity-40 disabled:cursor-not-allowed"
-              title="Verbindung mit aktuell eingestellter Auth neu aufbauen"
-              @click="handleAuthReconnect"
-            >
-              Mit aktueller Auth neu verbinden
-            </button>
-          </div>
-        </div>
+        <AuthConfigPanel
+          :headers="auth.headers.value"
+          :bearer-token="bearerToken"
+          :disabled="state === 'connecting'"
+          :url="url"
+          can-reconnect
+          :on-begin-o-auth="() => handleBeginOAuth(url, transportKind)"
+          @update:bearer="(t: string) => auth.setBearer(t)"
+          @update-header="(i: number, h: AuthHeader) => auth.updateHeader(i, h)"
+          @add-header="() => auth.addHeader()"
+          @remove-header="(i: number) => auth.removeHeader(i)"
+          @clear="() => auth.clear()"
+          @oauth-cleared="handleAuthReconnect"
+          @reconnect="handleAuthReconnect"
+        />
 
         <InspectorPanels
           :tools="tools"

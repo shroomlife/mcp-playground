@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, useTemplateRef } from 'vue'
-import { Loader2, Play, FileText, Link2, Download, Clock, Square } from 'lucide-vue-next'
+import { computed, nextTick, onMounted, ref, useTemplateRef } from 'vue'
+import { Loader2, Play, FileText, Link2, Download, Clock, Square, Eye } from 'lucide-vue-next'
 import JsonView from './JsonView.vue'
 import { useAbortableRun } from '~/composables/useAbortableRun'
 import type {
@@ -47,7 +47,15 @@ function initialValues(): Record<string, string> {
 
 const values = ref<Record<string, string>>(initialValues())
 const lastEntry = ref<CallHistoryEntry | null>(null)
+const rootRef = useTemplateRef<HTMLDivElement>('rootRef')
 const formRef = useTemplateRef<HTMLFormElement>('formRef')
+
+// See ToolDetail for rationale — scroll the header into view after the remount.
+onMounted(() => {
+  void nextTick(() => {
+    rootRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  })
+})
 
 const { running, progress, progressPercent, run, cancel } = useAbortableRun<CallHistoryEntry>()
 
@@ -102,8 +110,10 @@ const recentHistory = computed(() => {
 
 function replay(entry: CallHistoryEntry) {
   lastEntry.value = entry
-  formRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  resultRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
+
+const resultRef = useTemplateRef<HTMLElement>('resultRef')
 
 function formatTime(at: number): string {
   return new Date(at).toLocaleTimeString('de-DE', { hour12: false })
@@ -126,7 +136,7 @@ function downloadBlob(content: { uri: string; mimeType?: string; blob?: string }
 </script>
 
 <template>
-  <div class="flex flex-col min-h-0">
+  <div ref="rootRef" class="flex flex-col min-h-0">
     <!-- Head -->
     <header class="px-5 md:px-6 pt-5 pb-4 border-b border-border bg-surface-2/30">
       <div class="flex items-center gap-2 text-[11px] uppercase tracking-wide text-fg-muted font-medium mb-1">
@@ -283,6 +293,7 @@ function downloadBlob(content: { uri: string; mimeType?: string; blob?: string }
     <!-- Result -->
     <section
       v-if="lastEntry"
+      ref="resultRef"
       class="px-5 md:px-6 py-5 border-b border-border"
     >
       <div class="flex items-baseline justify-between mb-3">
@@ -363,15 +374,20 @@ function downloadBlob(content: { uri: string; mimeType?: string; blob?: string }
       v-if="recentHistory.length > 0"
       class="px-5 md:px-6 py-5"
     >
-      <h4 class="text-[11px] uppercase tracking-wide text-fg-muted font-medium mb-3">
-        Letzte Reads
-      </h4>
+      <div class="flex items-baseline justify-between mb-3">
+        <h4 class="text-[11px] uppercase tracking-wide text-fg-muted font-medium">
+          Letzte Reads
+        </h4>
+        <span class="text-[11px] text-fg-subtle font-mono">
+          URI &amp; Response — klick zum Anzeigen
+        </span>
+      </div>
       <ul class="space-y-1">
         <li
           v-for="entry in recentHistory"
           :key="entry.id"
           class="flex items-center gap-3 px-3 py-1.5 bg-surface border border-border rounded-md font-mono text-[11.5px] hover:bg-surface-2 transition-colors"
-          :class="lastEntry?.id === entry.id ? 'border-accent/40 bg-accent-soft/30' : ''"
+          :class="lastEntry?.id === entry.id ? 'border-cat-resource/40 bg-cat-resource-soft/40' : ''"
         >
           <span
             class="size-1.5 rounded-full shrink-0"
@@ -384,15 +400,22 @@ function downloadBlob(content: { uri: string; mimeType?: string; blob?: string }
             <Clock :size="10" />
             <span class="tabular-nums">{{ entry.durationMs }}ms</span>
           </span>
-          <span class="flex-1 min-w-0 truncate text-fg-2">
-            {{ entry.name }}
-          </span>
           <button
             type="button"
-            class="focus-ring shrink-0 text-accent hover:underline text-[11px]"
+            class="focus-ring flex-1 min-w-0 truncate text-left text-fg-2 hover:text-fg"
+            title="Response dieses Reads anzeigen"
             @click="replay(entry)"
           >
-            anzeigen
+            {{ entry.name }}
+          </button>
+          <button
+            type="button"
+            class="focus-ring shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] text-fg-muted hover:text-cat-resource hover:bg-cat-resource-soft/60 transition-colors"
+            title="Response anzeigen"
+            @click="replay(entry)"
+          >
+            <Eye :size="11" />
+            Response
           </button>
         </li>
       </ul>

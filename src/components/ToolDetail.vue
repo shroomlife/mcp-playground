@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, toRef, useTemplateRef } from 'vue'
-import { Play, Loader2, RotateCcw, Clock, ArrowDownUp, Square, Link2, Check, Bookmark, X } from 'lucide-vue-next'
+import { computed, nextTick, onMounted, ref, toRef, useTemplateRef } from 'vue'
+import { Play, Loader2, RotateCcw, Clock, ArrowDownUp, Square, Link2, Check, Bookmark, X, Eye } from 'lucide-vue-next'
 import SchemaForm from './SchemaForm.vue'
 import ToolResultView from './ToolResultView.vue'
 import JsonView from './JsonView.vue'
@@ -91,7 +91,18 @@ async function shareRecipe() {
 
 const { running, progress, progressPercent, run, cancel } = useAbortableRun<CallHistoryEntry>()
 
+const rootRef = useTemplateRef<HTMLDivElement>('rootRef')
 const formRef = useTemplateRef<HTMLFormElement>('formRef')
+
+// Parent keys us on tool.name, so switching tools remounts this component.
+// After mount we nudge the nearest scroll container to this header — otherwise,
+// picking a tool while scrolled to the bottom of a long list leaves the user
+// staring at the list footer instead of the freshly-loaded detail pane.
+onMounted(() => {
+  void nextTick(() => {
+    rootRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  })
+})
 
 function resetArgs() {
   args.value = getDefaultArgs(props.tool.inputSchema)
@@ -116,6 +127,14 @@ function replay(entry: CallHistoryEntry) {
   formRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
+// Show a past entry's stored response without overwriting the current form args.
+function showResponse(entry: CallHistoryEntry) {
+  lastEntry.value = entry
+  resultRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+const resultRef = useTemplateRef<HTMLElement>('resultRef')
+
 const lastResult = computed<ToolCallResult | null>(() => {
   const r = lastEntry.value?.result
   return r ? (r as ToolCallResult) : null
@@ -135,7 +154,7 @@ function formatTime(at: number): string {
 </script>
 
 <template>
-  <div class="flex flex-col min-h-0">
+  <div ref="rootRef" class="flex flex-col min-h-0">
     <!-- Tool head -->
     <header class="px-5 md:px-6 pt-5 pb-4 border-b border-border bg-surface-2/30">
       <div class="flex items-baseline gap-2 flex-wrap">
@@ -281,6 +300,7 @@ function formatTime(at: number): string {
     <!-- Result section -->
     <section
       v-if="lastEntry"
+      ref="resultRef"
       class="px-5 md:px-6 py-5 border-b border-border"
     >
       <div class="flex items-baseline justify-between mb-3">
@@ -366,15 +386,20 @@ function formatTime(at: number): string {
       v-if="recentHistory.length > 0"
       class="px-5 md:px-6 py-5"
     >
-      <h4 class="text-[11px] uppercase tracking-wide text-fg-muted font-medium mb-3">
-        Letzte Aufrufe
-      </h4>
+      <div class="flex items-baseline justify-between mb-3">
+        <h4 class="text-[11px] uppercase tracking-wide text-fg-muted font-medium">
+          Letzte Aufrufe
+        </h4>
+        <span class="text-[11px] text-fg-subtle font-mono">
+          Request &amp; Response — klick zum Anzeigen
+        </span>
+      </div>
       <ul class="space-y-1">
         <li
           v-for="entry in recentHistory"
           :key="entry.id"
-          class="flex items-center gap-3 px-3 py-1.5 bg-surface border border-border rounded-md font-mono text-[11.5px] hover:bg-surface-2 transition-colors"
-          :class="lastEntry?.id === entry.id ? 'border-accent/40 bg-accent-soft/30' : ''"
+          class="group flex items-center gap-3 px-3 py-1.5 bg-surface border border-border rounded-md font-mono text-[11.5px] hover:bg-surface-2 transition-colors"
+          :class="lastEntry?.id === entry.id ? 'border-cat-tool/40 bg-cat-tool-soft/40' : ''"
         >
           <span
             class="size-1.5 rounded-full shrink-0"
@@ -388,16 +413,31 @@ function formatTime(at: number): string {
             <Clock :size="10" />
             <span class="tabular-nums">{{ entry.durationMs }}ms</span>
           </span>
-          <span class="flex-1 min-w-0 truncate text-fg-2">
-            {{ entry.args ? JSON.stringify(entry.args) : '—' }}
-          </span>
           <button
             type="button"
-            class="focus-ring shrink-0 text-accent hover:underline text-[11px]"
+            class="focus-ring flex-1 min-w-0 truncate text-left text-fg-2 hover:text-fg"
+            title="Response dieses Aufrufs anzeigen"
+            @click="showResponse(entry)"
+          >
+            {{ entry.args ? JSON.stringify(entry.args) : '—' }}
+          </button>
+          <button
+            type="button"
+            class="focus-ring shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] text-fg-muted hover:text-cat-tool hover:bg-cat-tool-soft/60 transition-colors"
+            title="Response anzeigen"
+            @click="showResponse(entry)"
+          >
+            <Eye :size="11" />
+            Response
+          </button>
+          <button
+            type="button"
+            class="focus-ring shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] text-fg-muted hover:text-fg hover:bg-surface-2 transition-colors"
             title="Args in Formular laden"
             @click="replay(entry)"
           >
-            laden
+            <RotateCcw :size="11" />
+            Args
           </button>
         </li>
       </ul>
