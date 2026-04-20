@@ -31,6 +31,7 @@ const props = defineProps<{
   headers: AuthHeader[]
   bearerToken: string
   disabled?: boolean
+  reconnecting?: boolean
   url?: string
   canReconnect?: boolean
   onBeginOAuth?: () => void | Promise<void>
@@ -576,11 +577,12 @@ function updateValue(index: number, value: string) {
               type="button"
               :disabled="disabled"
               class="focus-ring shrink-0 inline-flex items-center gap-1.5 h-7 px-2.5 bg-accent text-white rounded-md text-[11px] font-medium hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              title="Verbindung mit aktuell eingestellter Auth neu aufbauen"
+              title="Handshake mit aktuell eingestellter Auth erneut ausführen — Tools &amp; Listen bleiben sichtbar"
               @click="emit('reconnect')"
             >
-              <RotateCw :size="11" />
-              Neu verbinden
+              <Loader2 v-if="reconnecting" :size="11" class="animate-spin" />
+              <RotateCw v-else :size="11" />
+              {{ reconnecting ? 'Reconnect läuft …' : 'Neu verbinden' }}
             </button>
           </div>
 

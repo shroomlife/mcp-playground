@@ -14,6 +14,7 @@ const props = defineProps<{
   url: string
   transport: TransportKind
   authHeaderCount?: number
+  reconnecting?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -68,7 +69,11 @@ onBeforeUnmount(() => {
     <div class="mx-auto max-w-[1200px] px-6 md:px-10 py-3 flex items-center gap-4 flex-wrap">
       <!-- Identity -->
       <div class="flex items-center gap-2.5 min-w-0">
-        <span class="size-2 rounded-full bg-success pulse-dot" aria-hidden="true" />
+        <span
+          class="size-2 rounded-full pulse-dot"
+          :class="reconnecting ? 'bg-warning' : 'bg-success'"
+          :aria-label="reconnecting ? 'Reconnect läuft' : 'Verbunden'"
+        />
         <div class="min-w-0">
           <div class="flex items-baseline gap-2">
             <h1 class="font-mono text-[13.5px] font-semibold text-fg truncate max-w-[24ch]">
@@ -76,6 +81,14 @@ onBeforeUnmount(() => {
             </h1>
             <span class="font-mono text-[11px] text-fg-muted tabular-nums">
               v{{ server.version }}
+            </span>
+            <span
+              v-if="reconnecting"
+              class="inline-flex items-center gap-1 h-[18px] px-1.5 bg-warning-soft text-warning rounded text-[10.5px] font-medium"
+              title="Handshake mit aktualisierter Auth läuft"
+            >
+              <span class="size-1 rounded-full bg-warning pulse-dot" aria-hidden="true" />
+              reconnecting
             </span>
           </div>
           <div class="flex items-center gap-1.5 mt-0.5 text-[11.5px] text-fg-muted min-w-0">

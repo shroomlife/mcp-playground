@@ -19,7 +19,12 @@ import { createOAuthProvider, createProxyFetch, hasOAuthTokens } from './useOAut
 import { elicit, resolveElicitation } from './useElicitation'
 import { runCorsDiagnostic, type CorsDiagnostic } from '~/lib/corsDiagnostic'
 
-export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'error'
+export type ConnectionState =
+  | 'idle'
+  | 'connecting'
+  | 'reconnecting'
+  | 'connected'
+  | 'error'
 export type TransportKind = 'http' | 'sse'
 
 export interface ServerSummary {
@@ -492,13 +497,15 @@ export function useMcpPlayground() {
     }
   }
 
-  async function disconnect() {
+  async function disconnect(options: { keepSessionData?: boolean } = {}) {
     await cleanupClient()
-    state.value = 'idle'
-    connectedAt.value = null
-    latencyMs.value = null
-    error.value = null
-    errorDetails.value = null
+    if (!options.keepSessionData) {
+      state.value = 'idle'
+      connectedAt.value = null
+      latencyMs.value = null
+      error.value = null
+      errorDetails.value = null
+    }
   }
 
   async function connect(
@@ -507,22 +514,35 @@ export function useMcpPlayground() {
     authHeaders: AuthHeader[] = [],
     authorizationCode?: string,
   ) {
-    await disconnect()
+    // In-place reconnect = we already have a live session to some server and the
+    // caller is just re-running the handshake with (likely) new auth. Hiding the
+    // Connected view during that would flash the Landing page back in; instead we
+    // tear the old transport down but keep server/tools/resources/prompts/history
+    // on screen until the new handshake either succeeds (replacing them) or fails
+    // (falling through to the error panel below).
+    const inPlaceReconnect = state.value === 'connected' && client.value !== null
+
+    await disconnect({ keepSessionData: inPlaceReconnect })
 
     url.value = target
     transportKind.value = kind
     activeAuthHeaders.value = authHeaders
     error.value = null
     errorDetails.value = null
-    state.value = 'connecting'
-    server.value = null
-    tools.value = []
-    resources.value = []
-    resourceTemplates.value = []
-    prompts.value = []
-    callHistory.value = []
 
-    pushLog('info', `Verbinde über ${kind.toUpperCase()} …`)
+    if (inPlaceReconnect) {
+      state.value = 'reconnecting'
+    } else {
+      state.value = 'connecting'
+      server.value = null
+      tools.value = []
+      resources.value = []
+      resourceTemplates.value = []
+      prompts.value = []
+      callHistory.value = []
+    }
+
+    pushLog('info', `${inPlaceReconnect ? 'Reconnect' : 'Verbinde'} über ${kind.toUpperCase()} …`)
 
     const started = performance.now()
 

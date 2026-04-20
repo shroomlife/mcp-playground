@@ -91,16 +91,25 @@ if (router.current.value.path === 'server' && router.current.value.mcpUrl) {
   transportKind.value = session.transport.value
 }
 
-const isConnected = computed(() => state.value === 'connected')
+// `reconnecting` counts as connected from the UI's point of view — the session
+// data is still on screen and the new handshake is in flight. This keeps the
+// Connected view stable across auth changes instead of flashing back to Landing.
+const isConnected = computed(
+  () => state.value === 'connected' || state.value === 'reconnecting',
+)
 
 // When the URL targets a specific server (direct visit, OAuth return, F5 on a connection),
 // we don't want the Landing form to briefly flash before the handshake starts.
 // Instead render a stable "restoring" placeholder while the connection settles.
 const isRestoring = computed(() => {
   const r = router.current.value
-  if (state.value === 'connected' || state.value === 'error') return false
+  if (isConnected.value || state.value === 'error') return false
   return r.path === 'server' || r.path === 'oauth-callback'
 })
+
+const authInputsBusy = computed(
+  () => state.value === 'connecting' || state.value === 'reconnecting',
+)
 
 const isLanding = computed(() => !isConnected.value && !isRestoring.value)
 const bearerToken = computed(() => auth.getBearerToken())
@@ -388,6 +397,7 @@ function handleDisconnect() {
         :url="url"
         :transport="transportKind"
         :auth-header-count="activeAuthCount"
+        :reconnecting="state === 'reconnecting'"
         @disconnect="handleDisconnect"
       />
 
@@ -401,7 +411,8 @@ function handleDisconnect() {
         <AuthConfigPanel
           :headers="auth.headers.value"
           :bearer-token="bearerToken"
-          :disabled="state === 'connecting'"
+          :disabled="authInputsBusy"
+          :reconnecting="state === 'reconnecting'"
           :url="url"
           can-reconnect
           :on-begin-o-auth="() => handleBeginOAuth(url, transportKind)"
