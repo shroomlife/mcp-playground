@@ -7,10 +7,12 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { z } from 'zod'
 import {
   ElicitRequestSchema,
+  LATEST_PROTOCOL_VERSION,
   LoggingMessageNotificationSchema,
   ToolListChangedNotificationSchema,
   ResourceListChangedNotificationSchema,
   PromptListChangedNotificationSchema,
+  type ClientCapabilities,
   type Progress,
 } from '@modelcontextprotocol/sdk/types.js'
 import { createOAuthProvider, createProxyFetch, hasOAuthTokens } from './useOAuth'
@@ -244,6 +246,23 @@ const HTTP_HINTS: Record<number, string> = {
 }
 
 const noop = () => {}
+
+const APP_VERSION = __APP_VERSION__
+const CLIENT_INFO = { name: 'mcp-playground', version: APP_VERSION } as const
+
+// Client-Capabilities we advertise to every MCP server. Keep them aligned with what
+// this playground can actually fulfil:
+// - `elicitation.form`: the SDK applies JSON-Schema defaults before our dialog opens.
+// - `elicitation.url`: enables URL-mode elicitation; `useElicitation` renders the link.
+// We intentionally do NOT declare `sampling` or `roots` — this is a browser app, we
+// cannot host an LLM or filesystem. Servers requesting them get a standard JSON-RPC
+// `MethodNotFound` back; the session stays alive (see `c.onerror` handler below).
+const CLIENT_CAPABILITIES: ClientCapabilities = {
+  elicitation: {
+    form: { applyDefaults: true },
+    url: {},
+  },
+}
 
 function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : []
@@ -535,11 +554,23 @@ export function useMcpPlayground() {
       attachTraceCapture(transport)
 
       const c = new Client(
-        { name: 'mcp-playground', version: '0.1.0' },
-        { capabilities: {} },
+        { ...CLIENT_INFO },
+        { capabilities: CLIENT_CAPABILITIES },
       )
 
       c.onerror = (err: Error) => {
+        // Capability mismatches that the SDK turns into an outbound JSON-RPC error don't
+        // kill the session — the server simply learns "nope, not supported". Render them
+        // as warnings instead of the usual red client-error so the user understands the
+        // session is still alive and which feature got declined.
+        if (/Client does not support ([\w-]+)/i.test(err.message)) {
+          const feature = err.message.match(/Client does not support ([\w-]+)/i)?.[1] ?? 'feature'
+          pushLog(
+            'warn',
+            `Server fragte nach "${feature}" — wird nicht unterstützt, Session läuft weiter.`,
+          )
+          return
+        }
         pushLog('error', `Client-Fehler: ${err.message}`)
       }
 
@@ -701,6 +732,61 @@ export function useMcpPlayground() {
       }
     }
 
+    // SDK-signatures that make the root cause unambiguous — probing the endpoint
+    // would only add noise (it's reachable, MCP-valid, but we refused a feature).
+    const capGap = rawMessage.match(
+      /Client does not support ([\w-]+(?:\s+capability)?)\s*(?:\(required for ([^)]+)\))?/i,
+    )
+    if (capGap) {
+      const feature = (capGap[2] ?? capGap[1] ?? 'unbekannte Capability').trim()
+      return {
+        title: 'Client-Capability fehlt',
+        code: 'CLIENT_CAPABILITY_GAP',
+        summary: `Der Server fragte "${feature}" an — dieser Playground deklariert die Capability nicht.`,
+        hint:
+          'Das ist ein Bug im Playground, kein Server-Fehler. Bitte melde die Capability als Issue, ' +
+          'damit sie in einer späteren Version unterstützt wird.',
+        raw: rawMessage,
+        target,
+        transport,
+        suggestOtherTransport: false,
+      }
+    }
+
+    if (/Unknown message type/i.test(rawMessage)) {
+      return {
+        title: 'Ungültiges JSON-RPC',
+        code: 'MCP_PROTOCOL_ERROR',
+        summary: 'Der Server hat eine Nachricht geschickt, die kein gültiges JSON-RPC 2.0 ist.',
+        hint:
+          'Dies ist typisch für Server, die MCP falsch implementieren oder vor einem echten MCP-Server ' +
+          'ein falsch konfiguriertes Gateway sitzt. Rohdaten siehe unten.',
+        raw: rawMessage,
+        target,
+        transport,
+        suggestOtherTransport: true,
+      }
+    }
+
+    if (
+      /protocolVersion/i.test(rawMessage) &&
+      /(not\s+supported|unsupported|mismatch)/i.test(rawMessage)
+    ) {
+      return {
+        title: 'Protokoll-Version nicht unterstützt',
+        code: 'MCP_PROTOCOL_VERSION',
+        summary:
+          'Der Server verwendet eine MCP-Protokollversion, die die eingebundene SDK nicht kennt.',
+        hint:
+          'Entweder der Server ist noch auf einer alten Version, oder die SDK im Playground ist veraltet. ' +
+          'SDK-Update in package.json prüfen.',
+        raw: rawMessage,
+        target,
+        transport,
+        suggestOtherTransport: false,
+      }
+    }
+
     const probe = await probeProxy(target, activeAuthHeaders.value)
 
     if (probe.kind === 'proxy_error') {
@@ -797,9 +883,9 @@ export function useMcpPlayground() {
           id: 'probe',
           method: 'initialize',
           params: {
-            protocolVersion: '2025-06-18',
-            capabilities: {},
-            clientInfo: { name: 'mcp-playground-probe', version: '0.1.0' },
+            protocolVersion: LATEST_PROTOCOL_VERSION,
+            capabilities: CLIENT_CAPABILITIES,
+            clientInfo: { ...CLIENT_INFO },
           },
         }),
       })
@@ -821,6 +907,25 @@ export function useMcpPlayground() {
         return { kind: 'http_error', status: res.status, statusText: res.statusText }
       }
 
+      // HTTP 200 — StreamableHTTP servers answer `initialize` either with a JSON-RPC body
+      // (Content-Type: application/json) or with an SSE stream. Both are valid MCP. Treat
+      // anything else (HTML error pages, plain text, empty body) as "reachable but not MCP".
+      const contentType = res.headers.get('content-type')?.toLowerCase() ?? ''
+      if (contentType.startsWith('text/event-stream')) {
+        // Don't consume the stream — presence of the content-type is signal enough.
+        return { kind: 'ok' }
+      }
+      if (contentType.startsWith('application/json')) {
+        try {
+          const body = (await res.json()) as { jsonrpc?: string; result?: unknown; error?: unknown }
+          if (body.jsonrpc === '2.0' && ('result' in body || 'error' in body)) {
+            return { kind: 'ok' }
+          }
+        } catch {
+          // fall through — not valid JSON despite the header
+        }
+        return { kind: 'reachable_not_mcp' }
+      }
       return { kind: 'reachable_not_mcp' }
     } catch {
       return { kind: 'unknown' }
