@@ -17,6 +17,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 import { createOAuthProvider, createProxyFetch, hasOAuthTokens } from './useOAuth'
 import { elicit, resolveElicitation } from './useElicitation'
+import { runCorsDiagnostic, type CorsDiagnostic } from '~/lib/corsDiagnostic'
 
 export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'error'
 export type TransportKind = 'http' | 'sse'
@@ -150,6 +151,8 @@ export interface ErrorDetails {
   target: string
   transport: TransportKind
   suggestOtherTransport: boolean
+  /** Optional CORS-Preflight-Diagnose — nur bei Netzwerk/CORS/MCP-Fehlern angehängt. */
+  diagnostic?: CorsDiagnostic
 }
 
 const ERROR_HINTS: Record<string, { title: string; hint: string }> = {
@@ -704,8 +707,22 @@ export function useMcpPlayground() {
       pushLog('error', `Verbindung fehlgeschlagen: ${msg}`)
       await cleanupClient().catch(noop)
       const details = await classifyConnectError(target, kind, msg)
+      // User sieht den Fehler sofort; die Diagnose patcht sich hinterher rein.
+      // Spart 8 s Spinner, falls der OPTIONS-Preflight lange läuft oder hängt.
       errorDetails.value = details
       state.value = 'error'
+      const DIAGNOSTIC_CODES = new Set(['NETWORK_OR_CORS', 'MCP_ERROR', 'NOT_MCP'])
+      if (DIAGNOSTIC_CODES.has(details.code)) {
+        void runCorsDiagnostic(target, { signal: AbortSignal.timeout(8_000) })
+          .then((diagnostic) => {
+            // Nur patchen, wenn immer noch dieselbe Fehlerinstanz sichtbar ist
+            // — User könnte zwischenzeitlich retry'd oder disconnect'd haben.
+            if (errorDetails.value === details) {
+              errorDetails.value = { ...details, diagnostic }
+            }
+          })
+          .catch(() => { /* Timeout oder CORS-Block — Panel behält Basis-Infos */ })
+      }
     }
   }
 
@@ -787,6 +804,32 @@ export function useMcpPlayground() {
       }
     }
 
+    // Browser-level fetch failure — happens on CORS block, DNS failure, TLS issue, or mixed-content.
+    // "Failed to fetch" (Chrome/Edge), "NetworkError" (Firefox), "Load failed" (Safari).
+    // In prod the playground talks directly to the MCP server; CORS is by far the most common cause.
+    // In dev the Vite proxy sits in between — a fetch-level failure there usually means the
+    // proxy/dev server itself isn't responding, because upstream errors get wrapped into a
+    // JSON envelope by the proxy.
+    if (/Failed to fetch|NetworkError|Load failed/i.test(rawMessage)) {
+      return {
+        title: 'Netzwerk- oder CORS-Fehler',
+        code: 'NETWORK_OR_CORS',
+        summary:
+          'Der Browser konnte den Request nicht absenden oder die Response nicht lesen. Das ist kein MCP-Fehler — es hängt an Browser-Security oder am Netzwerk.',
+        hint: import.meta.env.DEV
+          ? 'In Dev geht alles über den Vite-Proxy. Diese Meldung kommt fast nur, wenn der ' +
+            'Dev-Server selbst weg ist — check ob `vite` noch läuft. Eingerichtet auf Port 5775.'
+          : 'Häufigste Ursache: der Server setzt keinen passenden Access-Control-Allow-Origin-Header, ' +
+            'oder die Allow-Headers-Liste im Preflight ist unvollständig. Die CORS-Diagnose unten ' +
+            'zeigt die genauen Server-Antworten. Alternative Ursachen: Server offline, DNS-Fehler, ' +
+            'TLS-Zertifikat, Mixed-Content (http über https).',
+        raw: rawMessage,
+        target,
+        transport,
+        suggestOtherTransport: false,
+      }
+    }
+
     const probe = await probeProxy(target, activeAuthHeaders.value)
 
     if (probe.kind === 'proxy_error') {
@@ -837,6 +880,23 @@ export function useMcpPlayground() {
       }
     }
 
+    if (probe.kind === 'network_or_cors') {
+      return {
+        title: 'Netzwerk- oder CORS-Fehler',
+        code: 'NETWORK_OR_CORS',
+        summary:
+          'Der Browser konnte weder Connect noch Probe durchbringen. Das passiert bei CORS-Block, DNS-Fehler, TLS-Problem oder wenn der Host offline ist.',
+        hint:
+          'Öffne Browser-Devtools → Network-Tab und schau auf den OPTIONS-Preflight. Fehlt ein ' +
+          'Access-Control-Allow-Origin-Header oder fehlt ein erwarteter Request-Header in der ' +
+          'Allow-Headers-Liste? Das ist die häufigste Ursache.',
+        raw: rawMessage,
+        target,
+        transport,
+        suggestOtherTransport: false,
+      }
+    }
+
     return {
       title: 'MCP-Handshake fehlgeschlagen',
       code: 'MCP_ERROR',
@@ -854,6 +914,7 @@ export function useMcpPlayground() {
     | { kind: 'http_error'; status: number; statusText: string }
     | { kind: 'reachable_not_mcp' }
     | { kind: 'ok' }
+    | { kind: 'network_or_cors' }
     | { kind: 'unknown' }
 
   async function probeProxy(
@@ -927,7 +988,16 @@ export function useMcpPlayground() {
         return { kind: 'reachable_not_mcp' }
       }
       return { kind: 'reachable_not_mcp' }
-    } catch {
+    } catch (err) {
+      // In prod (no dev-proxy) a throwing fetch almost always means the browser
+      // refused the request — CORS preflight failed, host unreachable, DNS error,
+      // or TLS issue. Browsers surface all of these as a single TypeError.
+      // In dev the /api/mcp proxy catches upstream errors and returns our JSON
+      // envelope, so reaching this catch is rare and usually means the Vite
+      // server itself is down.
+      if (!import.meta.env.DEV && err instanceof TypeError) {
+        return { kind: 'network_or_cors' }
+      }
       return { kind: 'unknown' }
     }
   }

@@ -23,6 +23,7 @@ import {
   ShieldAlert,
 } from 'lucide-vue-next'
 import { clearOAuth, hasOAuthTokens, probeOAuthSupport } from '~/composables/useOAuth'
+import type { OAuthProbeResult } from '~/composables/useOAuth'
 import type { AuthHeader } from '~/composables/useMcpPlayground'
 
 const props = defineProps<{
@@ -94,6 +95,8 @@ const canStartOAuth = computed(
 // dead-end for servers that don't publish OAuth metadata.
 type ProbeState = 'idle' | 'checking' | 'supported' | 'unsupported'
 const probeState = ref<ProbeState>('idle')
+const probeResult = ref<OAuthProbeResult | null>(null)
+const showProbeDetails = ref(false)
 let probeAbort: AbortController | null = null
 let probeTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -113,6 +116,7 @@ watch(
     const trimmed = nextUrl?.trim() ?? ''
     if (!trimmed || !props.onBeginOAuth) {
       probeState.value = 'idle'
+      probeResult.value = null
       return
     }
     // Debounce so typing in the URL field doesn't fire a probe per keystroke.
@@ -120,13 +124,16 @@ watch(
       const controller = new AbortController()
       probeAbort = controller
       probeState.value = 'checking'
+      probeResult.value = null
       probeOAuthSupport(trimmed, controller.signal)
-        .then((supported) => {
+        .then((result) => {
           if (controller.signal.aborted) return
-          probeState.value = supported ? 'supported' : 'unsupported'
+          probeResult.value = result
+          probeState.value = result.supported ? 'supported' : 'unsupported'
         })
         .catch(() => {
           if (controller.signal.aborted) return
+          probeResult.value = null
           probeState.value = 'unsupported'
         })
     }, 400)
@@ -135,6 +142,36 @@ watch(
 )
 
 onBeforeUnmount(cancelProbe)
+
+// Derive a single reason for why OAuth looks unavailable. Priority: CORS wins
+// because it's the most actionable (server admin fixes it) and easiest to miss.
+type UnsupportedReason = 'cors' | 'invalid_json' | 'http_error' | 'not_found' | 'unknown'
+const unsupportedReason = computed<UnsupportedReason>(() => {
+  const result = probeResult.value
+  if (!result || result.endpoints.length === 0) return 'unknown'
+  if (result.endpoints.some((e) => e.status === 'cors_or_network')) return 'cors'
+  if (result.endpoints.some((e) => e.status === 'invalid_json')) return 'invalid_json'
+  if (result.endpoints.some((e) => e.status === 'http_error')) return 'http_error'
+  if (result.endpoints.every((e) => e.status === 'not_found')) return 'not_found'
+  return 'unknown'
+})
+
+function endpointPath(url: string): string {
+  try {
+    return new URL(url).pathname
+  } catch {
+    return url
+  }
+}
+
+const endpointStatusLabel: Record<string, string> = {
+  ok: 'OK (200 + JSON)',
+  not_found: 'nicht gefunden',
+  http_error: 'HTTP-Fehler',
+  cors_or_network: 'CORS oder Netzwerk',
+  invalid_json: 'kein gültiges JSON',
+  url_invalid: 'URL ungültig',
+}
 
 const expanded = ref<string[]>([])
 const showBearer = ref(false)
@@ -258,18 +295,95 @@ function updateValue(index: number, value: string) {
               <span>OAuth-Support wird geprüft …</span>
             </div>
 
-            <!-- Probe says: this server doesn't advertise OAuth. Button hidden, muted hint. -->
+            <!-- Probe says: OAuth looks unavailable. Which specific reason we show
+                 depends on what actually failed — CORS-block gets a distinct
+                 treatment because it's an admin-fixable issue, not a missing feature. -->
             <div
               v-else-if="probeState === 'unsupported'"
-              class="flex items-start gap-2 p-2.5 bg-surface-2 border border-border rounded-md"
+              class="space-y-2"
             >
-              <ShieldOff :size="13" class="text-fg-muted shrink-0 mt-0.5" />
-              <div class="flex-1 min-w-0 text-[11.5px] text-fg-muted leading-[1.4]">
-                <span class="font-medium text-fg-2">Keine OAuth-Anmeldung verfügbar.</span>
-                Der Server stellt keine OAuth-Metadaten bereit
-                (<code class="font-mono">.well-known/oauth-authorization-server</code>).
-                Falls der Server doch Auth braucht, trag einen Bearer-Token oder
-                Custom-Header unten ein.
+              <div
+                :class="[
+                  'flex items-start gap-2 p-2.5 border rounded-md',
+                  unsupportedReason === 'cors'
+                    ? 'bg-warning-soft/40 border-warning/30'
+                    : 'bg-surface-2 border-border',
+                ]"
+              >
+                <ShieldAlert
+                  v-if="unsupportedReason === 'cors'"
+                  :size="13"
+                  class="text-warning shrink-0 mt-0.5"
+                />
+                <ShieldOff
+                  v-else
+                  :size="13"
+                  class="text-fg-muted shrink-0 mt-0.5"
+                />
+                <div class="flex-1 min-w-0 text-[11.5px] leading-[1.4]">
+                  <template v-if="unsupportedReason === 'cors'">
+                    <span class="font-medium text-fg">OAuth-Metadaten durch CORS blockiert.</span>
+                    <span class="text-fg-2">
+                      Der Server liefert möglicherweise OAuth, aber der Browser darf
+                      <code class="font-mono">.well-known/oauth-*</code> nicht lesen. Auf dem
+                      Server <code class="font-mono">Access-Control-Allow-Origin</code> für
+                      diese Pfade setzen.
+                    </span>
+                  </template>
+                  <template v-else-if="unsupportedReason === 'invalid_json'">
+                    <span class="font-medium text-fg-2">OAuth-Endpoint antwortet, liefert aber kein gültiges JSON.</span>
+                    <span class="text-fg-muted"> Server-Logs prüfen — evtl. HTML-Errorseite statt JSON.</span>
+                  </template>
+                  <template v-else-if="unsupportedReason === 'http_error'">
+                    <span class="font-medium text-fg-2">OAuth-Endpoint antwortet mit HTTP-Fehler.</span>
+                    <span class="text-fg-muted"> Details unten — 5xx deutet auf Server-Bug, 401/403 auf einen Auth-Wrapper vor der Discovery.</span>
+                  </template>
+                  <template v-else>
+                    <span class="font-medium text-fg-2">Keine OAuth-Anmeldung verfügbar.</span>
+                    <span class="text-fg-muted">
+                      Der Server stellt keine OAuth-Metadaten bereit
+                      (<code class="font-mono">.well-known/oauth-authorization-server</code>).
+                      Falls der Server doch Auth braucht, trag einen Bearer-Token oder
+                      Custom-Header unten ein.
+                    </span>
+                  </template>
+                </div>
+              </div>
+
+              <button
+                v-if="probeResult && probeResult.endpoints.length > 0"
+                type="button"
+                class="focus-ring w-full flex items-center justify-between gap-1.5 px-2.5 py-1.5 bg-surface border border-border rounded-md text-[11px] text-fg-muted hover:text-fg-2 transition-colors"
+                :aria-expanded="showProbeDetails"
+                @click="showProbeDetails = !showProbeDetails"
+              >
+                <span>Probe-Details {{ showProbeDetails ? 'ausblenden' : 'anzeigen' }}</span>
+                <ChevronDown
+                  :size="11"
+                  class="transition-transform"
+                  :class="{ 'rotate-180': showProbeDetails }"
+                />
+              </button>
+              <div
+                v-if="showProbeDetails && probeResult"
+                class="p-2.5 bg-surface border border-border rounded-md"
+              >
+                <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11px] font-mono">
+                  <template v-for="endpoint in probeResult.endpoints" :key="endpoint.url">
+                    <dt class="text-fg-muted truncate" :title="endpoint.url">
+                      {{ endpointPath(endpoint.url) }}
+                    </dt>
+                    <dd
+                      :class="[
+                        endpoint.status === 'ok' ? 'text-success' : 'text-fg-2',
+                        'break-all',
+                      ]"
+                    >
+                      {{ endpointStatusLabel[endpoint.status] ?? endpoint.status }}<template v-if="endpoint.httpStatus"> · HTTP {{ endpoint.httpStatus }}</template>
+                      <template v-if="endpoint.detail"> · {{ endpoint.detail }}</template>
+                    </dd>
+                  </template>
+                </dl>
               </div>
             </div>
 

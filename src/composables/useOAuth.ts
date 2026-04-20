@@ -25,6 +25,14 @@ import type {
 const PREFIX = 'mcp-playground:oauth:'
 const PENDING_KEY = `${PREFIX}pending`
 
+/**
+ * In dev, the Vite proxy (`/api/mcp`) tunnels MCP + OAuth traffic through our
+ * SSRF-hardened handler. In production builds (static hosting), no proxy exists —
+ * the browser talks to MCP and OAuth servers directly, subject to whatever CORS
+ * the target server allows.
+ */
+const HAS_DEV_PROXY = import.meta.env.DEV
+
 export interface PendingCallback {
   mcpUrl: string
   transport: 'http' | 'sse'
@@ -110,51 +118,136 @@ export function hasOAuthTokens(mcpUrl: string): boolean {
 }
 
 /**
- * Best-effort "does this MCP server offer OAuth?" probe. Used by the AuthConfigPanel to
- * decide whether to show the "Anmelden"-Button — hiding it for servers without OAuth
- * avoids dead-end clicks where the SDK silently completes without redirecting.
- *
- * Two parallel checks:
- *   1. RFC 8414 `.well-known/oauth-authorization-server` on the server's origin
- *   2. RFC 9728 `.well-known/oauth-protected-resource` on the server's origin
- *
- * Both go through our dev-proxy so CORS doesn't bite. A positive hit means the server
- * publishes enough metadata for the SDK's auth() flow to succeed.
+ * Status of a single probed OAuth metadata endpoint. `ok` is the happy path; the
+ * rest narrow the failure mode so the UI can distinguish "no OAuth here" from
+ * "OAuth is here but CORS blocks the read".
  */
-export async function probeOAuthSupport(mcpUrl: string, signal?: AbortSignal): Promise<boolean> {
+export type OAuthProbeEndpointStatus =
+  | 'ok'
+  | 'not_found'
+  | 'http_error'
+  | 'cors_or_network'
+  | 'invalid_json'
+  | 'url_invalid'
+
+export interface OAuthProbeEndpoint {
+  url: string
+  status: OAuthProbeEndpointStatus
+  httpStatus?: number
+  detail?: string
+}
+
+export interface OAuthProbeResult {
+  supported: boolean
+  endpoints: OAuthProbeEndpoint[]
+}
+
+/**
+ * Best-effort "does this MCP server offer OAuth?" probe.
+ *
+ * Two parallel checks against the server's origin:
+ *   1. RFC 8414 `.well-known/oauth-authorization-server`
+ *   2. RFC 9728 `.well-known/oauth-protected-resource`
+ *
+ * Returns detail per endpoint so the UI can tell the user *why* OAuth looks
+ * unavailable — "metadata not found" and "metadata blocked by CORS" are very
+ * different problems, and the user needs to know which one to fix.
+ *
+ * In dev the calls go through the Vite proxy (`/api/mcp?url=…`) so CORS
+ * doesn't bite. In prod builds they go direct — CORS becomes the real
+ * signal, and a thrown TypeError here means the browser refused the read.
+ */
+export async function probeOAuthSupport(
+  mcpUrl: string,
+  signal?: AbortSignal,
+): Promise<OAuthProbeResult> {
   const trimmed = mcpUrl.trim()
-  if (!trimmed) return false
+  if (!trimmed) {
+    return { supported: false, endpoints: [] }
+  }
   let origin: string
+  let pathSuffix = ''
   try {
-    origin = new URL(trimmed).origin
+    const parsed = new URL(trimmed)
+    origin = parsed.origin
+    // RFC 9728 §3.1 specifies `oauth-protected-resource/<resource-path>` as
+    // canonical — we probe that variant in addition to the bare path so servers
+    // that only implement the canonical form (a reasonable choice) aren't
+    // falsely reported as "no OAuth". Trailing slash stripped so we don't
+    // produce `/.well-known/oauth-protected-resource//`.
+    pathSuffix = parsed.pathname.replace(/\/+$/, '')
   } catch {
-    return false
+    return {
+      supported: false,
+      endpoints: [{ url: trimmed, status: 'url_invalid' }],
+    }
   }
 
-  async function probe(target: string): Promise<boolean> {
+  async function probe(target: string): Promise<OAuthProbeEndpoint> {
     try {
       const url = HAS_DEV_PROXY
         ? `/api/mcp?url=${encodeURIComponent(target)}`
         : target
       const res = await fetch(url, { method: 'GET', signal })
-      if (!res.ok) return false
+      if (res.status === 404) {
+        return { url: target, status: 'not_found', httpStatus: 404 }
+      }
+      if (!res.ok) {
+        return {
+          url: target,
+          status: 'http_error',
+          httpStatus: res.status,
+          detail: res.statusText,
+        }
+      }
       const text = await res.text()
       try {
         const parsed = JSON.parse(text) as unknown
-        return Boolean(parsed) && typeof parsed === 'object' && !Array.isArray(parsed)
+        if (Boolean(parsed) && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          return { url: target, status: 'ok', httpStatus: res.status }
+        }
+        return {
+          url: target,
+          status: 'invalid_json',
+          httpStatus: res.status,
+          detail: 'Antwort war kein JSON-Objekt',
+        }
       } catch {
-        return false
+        return {
+          url: target,
+          status: 'invalid_json',
+          httpStatus: res.status,
+          detail: 'Antwort konnte nicht als JSON geparst werden',
+        }
       }
-    } catch {
-      return false
+    } catch (err) {
+      // TypeError is how browsers surface CORS blocks, DNS failures, TLS errors
+      // and refused connections. In dev we proxy via `/api/mcp`, so TypeError
+      // here would mean the Vite server itself is gone — same user-visible
+      // symptom, same message works.
+      if (err instanceof TypeError) {
+        return { url: target, status: 'cors_or_network' }
+      }
+      return {
+        url: target,
+        status: 'cors_or_network',
+        detail: err instanceof Error ? err.message : String(err),
+      }
     }
   }
 
-  const results = await Promise.all([
-    probe(`${origin}/.well-known/oauth-authorization-server`),
-    probe(`${origin}/.well-known/oauth-protected-resource`),
-  ])
-  return results.some(Boolean)
+  const probeTargets = [
+    `${origin}/.well-known/oauth-authorization-server`,
+    `${origin}/.well-known/oauth-protected-resource`,
+  ]
+  if (pathSuffix && pathSuffix !== '/') {
+    probeTargets.push(`${origin}/.well-known/oauth-protected-resource${pathSuffix}`)
+  }
+  const endpoints = await Promise.all(probeTargets.map((t) => probe(t)))
+  return {
+    supported: endpoints.some((e) => e.status === 'ok'),
+    endpoints,
+  }
 }
 
 export function clearOAuth(mcpUrl: string): void {
@@ -329,19 +422,6 @@ function utf8ToBase64(str: string): string {
  * Authorization *redirects* (top-level navigation to the AS login page) are not wrapped —
  * those are full-page navigations, not fetches.
  */
-/**
- * In dev, the Vite proxy (`/api/mcp`) tunnels MCP + OAuth traffic through our
- * SSRF-hardened handler, and Authorization headers travel via the
- * `x-mcp-forward-headers` base64 sidechannel (because the browser's request would
- * otherwise get stripped at the proxy).
- *
- * In production builds (static hosting, e.g. GitHub Pages), no proxy exists. The
- * browser talks to the MCP and OAuth servers directly. Authorization and other
- * custom headers pass through as plain fetch headers — whatever CORS the target
- * server allows is what we get.
- */
-const HAS_DEV_PROXY = import.meta.env.DEV
-
 export function createProxyFetch(
   extraForwardHeaders: Record<string, string> = {},
 ): FetchLike {
