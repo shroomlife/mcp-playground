@@ -100,7 +100,6 @@ src/
     AuthConfigPanel.vue       # OAuth Login/Logout + Token-Inspektor + Manual-Header-Collapsible
     ManualAuthFields.vue      # Bearer + Custom-Header-Inputs (extrahiert, Re-use)
     RecentServers.vue         # "Zuletzt verbunden" Liste auf Landing (aus useServerHistory)
-    ServerRegistry.vue        # Kuratierter Public-Server-Katalog auf Landing (Filter + Auth-Badges)
     ServerPreviewCard.vue     # Probe-Card unter der URL-Eingabe (initialize-Fingerabdruck)
     ConnectedHeader.vue       # Sticky Server-Strip nach Handshake (ohne Capability-Chips, siehe Tabs)
     ServerInstructions.vue    # Dismissible Banner für server.instructions
@@ -131,8 +130,6 @@ src/
     claudeCodeInstall.ts      # File-System-Access-API Integration (+ Auth-Injection, ENV-Var-Mode)
     capabilityCopy.ts         # Deutsche Erklärungen pro Capability + describeCapability-Helper
     corsDiagnostic.ts         # Probe-Klassifikation für "wieso klappt die Verbindung nicht"
-  data/
-    public-servers.ts         # Kuratierte Liste Public MCP-Server (ServerRegistry)
 ```
 
 **Data flow:** `useMcpPlayground()` hält den gesamten Verbindungsstate als `ref`s / `shallowRef`s.

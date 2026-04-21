@@ -1,0 +1,147 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e7]: MCP Playground
+    - generic [ref=e8]:
+      - generic [ref=e11]: bereit
+      - button "Zu Dark Mode wechseln" [ref=e12] [cursor=pointer]:
+        - img [ref=e13]
+  - main [ref=e15]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - heading "Einen MCP-Server kennenlernen" [level=1] [ref=e18]
+        - paragraph [ref=e19]: Ein kleines Werkzeug für das Model Context Protocol. URL eintragen, verbinden, Tools & Resources erkunden.
+      - generic [ref=e21]:
+        - generic [ref=e22]:
+          - generic [ref=e23]: Server-URL
+          - textbox "Server-URL" [ref=e24]:
+            - /placeholder: https://mcp.example.com/mcp
+        - generic [ref=e25]:
+          - generic [ref=e26]: Transport
+          - radiogroup "MCP-Transport wählen" [ref=e27]:
+            - radio "HTTP Streamable" [checked] [ref=e28] [cursor=pointer]:
+              - generic [ref=e29]:
+                - text: HTTP
+                - generic [ref=e30]: Streamable
+            - radio "SSE Server-Sent Events" [ref=e31] [cursor=pointer]:
+              - generic [ref=e32]:
+                - text: SSE
+                - generic [ref=e33]: Server-Sent Events
+        - button "Verbinden" [disabled] [ref=e34]:
+          - img [ref=e35]
+          - generic [ref=e37]: Verbinden
+          - img [ref=e38]
+        - generic [ref=e40]:
+          - generic [ref=e41]: Beispiele
+          - generic [ref=e42]:
+            - button "DeepWiki http" [ref=e43] [cursor=pointer]:
+              - generic [ref=e44]: DeepWiki
+              - generic [ref=e45]: http
+            - button "Localhost HTTP http" [ref=e46] [cursor=pointer]:
+              - generic [ref=e47]: Localhost HTTP
+              - generic [ref=e48]: http
+            - button "Localhost SSE sse" [ref=e49] [cursor=pointer]:
+              - generic [ref=e50]: Localhost SSE
+              - generic [ref=e51]: sse
+      - generic [ref=e52]:
+        - generic [ref=e54]:
+          - heading "Öffentliche MCP-Server" [level=3] [ref=e55]:
+            - img [ref=e56]
+            - text: Öffentliche MCP-Server
+          - paragraph [ref=e59]: Handverlesen — jeder Eintrag ist CORS-geprüft und läuft aus dem Browser.
+        - generic [ref=e60]:
+          - generic [ref=e61]:
+            - img [ref=e62]
+            - searchbox "Server-Katalog durchsuchen" [ref=e65]
+          - tablist "Auth-Filter" [ref=e66]:
+            - tab "Alle 3" [selected] [ref=e67] [cursor=pointer]
+            - tab "Offen 2" [ref=e68] [cursor=pointer]:
+              - img [ref=e69]
+              - text: Offen
+              - generic [ref=e72]: "2"
+            - tab "OAuth 1" [ref=e73] [cursor=pointer]:
+              - img [ref=e74]
+              - text: OAuth
+              - generic [ref=e77]: "1"
+        - list [ref=e78]:
+          - listitem [ref=e79]:
+            - button "DeepWiki verbinden" [ref=e80] [cursor=pointer]:
+              - generic [ref=e81]:
+                - generic [ref=e82]: D
+                - generic [ref=e83]:
+                  - generic [ref=e84]:
+                    - generic [ref=e85]: DeepWiki
+                    - generic [ref=e86]:
+                      - img [ref=e87]
+                      - text: Offen
+                  - generic [ref=e90]: mcp.deepwiki.com
+                - 'generic "Transport: http" [ref=e91]': http
+              - paragraph [ref=e92]: RAG-Zugriff auf GitHub-Repos — frag jedes Repo nach Architektur und Code.
+              - generic [ref=e93]:
+                - generic [ref=e94]: Docs
+                - generic [ref=e95]:
+                  - text: Verbinden
+                  - img [ref=e96]
+            - link "DeepWiki Dokumentation öffnen" [ref=e98] [cursor=pointer]:
+              - /url: https://mcp.deepwiki.com
+              - img [ref=e99]
+          - listitem [ref=e103]:
+            - button "Hugging Face verbinden" [ref=e104] [cursor=pointer]:
+              - generic [ref=e105]:
+                - generic [ref=e106]: H
+                - generic [ref=e107]:
+                  - generic [ref=e108]:
+                    - generic [ref=e109]: Hugging Face
+                    - generic [ref=e110]:
+                      - img [ref=e111]
+                      - text: Offen
+                  - generic [ref=e114]: hf.co
+                - 'generic "Transport: http" [ref=e115]': http
+              - paragraph [ref=e116]: Modelle, Datasets und Spaces durchsuchen und lesen.
+              - generic [ref=e117]:
+                - generic [ref=e118]: Developer
+                - generic [ref=e119]:
+                  - text: Verbinden
+                  - img [ref=e120]
+            - link "Hugging Face Dokumentation öffnen" [ref=e122] [cursor=pointer]:
+              - /url: https://huggingface.co/docs/hub/en/mcp
+              - img [ref=e123]
+          - listitem [ref=e127]:
+            - button "GitHub verbinden" [ref=e128] [cursor=pointer]:
+              - generic [ref=e129]:
+                - generic [ref=e130]: G
+                - generic [ref=e131]:
+                  - generic [ref=e132]:
+                    - generic [ref=e133]: GitHub
+                    - generic "OAuth-Login erforderlich" [ref=e134]:
+                      - img [ref=e135]
+                      - text: OAuth
+                  - generic [ref=e138]: api.githubcopilot.com
+                - 'generic "Transport: http" [ref=e139]': http
+              - paragraph [ref=e140]: Offizieller GitHub-MCP — Issues, PRs, Code-Suche. Benötigt OAuth.
+              - generic [ref=e141]:
+                - generic [ref=e142]: Developer
+                - generic [ref=e143]:
+                  - text: Verbinden
+                  - img [ref=e144]
+            - link "GitHub Dokumentation öffnen" [ref=e146] [cursor=pointer]:
+              - /url: https://github.com/github/github-mcp-server
+              - img [ref=e147]
+        - paragraph [ref=e151]:
+          - text: "Mehr:"
+          - link "awesome-remote-mcp-servers ↗" [ref=e152] [cursor=pointer]:
+            - /url: https://github.com/jaw9c/awesome-remote-mcp-servers
+          - text: ·
+          - link "modelcontextprotocol/servers ↗" [ref=e153] [cursor=pointer]:
+            - /url: https://github.com/modelcontextprotocol/servers
+      - generic [ref=e154]:
+        - generic [ref=e155]: Erfahre mehr über MCP
+        - generic [ref=e156]:
+          - link "modelcontextprotocol.io ↗" [ref=e157] [cursor=pointer]:
+            - /url: https://modelcontextprotocol.io/
+          - link "Spec ↗" [ref=e158] [cursor=pointer]:
+            - /url: https://modelcontextprotocol.io/specification
+          - link "Server-Katalog ↗" [ref=e159] [cursor=pointer]:
+            - /url: https://github.com/modelcontextprotocol/servers
+          - link "Dieses Repo ↗" [ref=e160] [cursor=pointer]:
+            - /url: https://github.com/shroomlife/mcp-playground
+        - generic [ref=e161]: Tailwind v4 · Vue 3.5 · Reka UI · MCP SDK
