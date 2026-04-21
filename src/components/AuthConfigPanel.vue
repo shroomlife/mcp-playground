@@ -109,54 +109,53 @@ const canStartOAuth = computed(
   () => Boolean(props.url?.trim()) && Boolean(props.onBeginOAuth) && !oauthActive.value,
 )
 
-// Proactive OAuth-Capability probe: we don't want the "Anmelden"-Button to be a
-// dead-end for servers that don't publish OAuth metadata.
+// Lazy OAuth-Capability probe: läuft erst, wenn der User das Auth-Accordion
+// aufklappt UND noch kein OAuth-Token gespeichert ist. Vorher war die Probe
+// auf jede URL-Änderung verdrahtet — das feuerte zwei .well-known/*-Requests
+// direkt beim Landing/Connect, deren 404s als Console-Errors geloggt wurden
+// ohne dass der User je das Panel geöffnet hätte.
 type ProbeState = 'idle' | 'checking' | 'supported' | 'unsupported'
 const probeState = ref<ProbeState>('idle')
 const probeResult = ref<OAuthProbeResult | null>(null)
 const showProbeDetails = ref(false)
 let probeAbort: AbortController | null = null
-let probeTimer: ReturnType<typeof setTimeout> | null = null
+let probedUrl: string | null = null
 
 function cancelProbe() {
   probeAbort?.abort()
   probeAbort = null
-  if (probeTimer) {
-    clearTimeout(probeTimer)
-    probeTimer = null
-  }
 }
 
+function runProbe(target: string) {
+  cancelProbe()
+  const controller = new AbortController()
+  probeAbort = controller
+  probeState.value = 'checking'
+  probeResult.value = null
+  probedUrl = target
+  probeOAuthSupport(target, controller.signal)
+    .then((result) => {
+      if (controller.signal.aborted) return
+      probeResult.value = result
+      probeState.value = result.supported ? 'supported' : 'unsupported'
+    })
+    .catch(() => {
+      if (controller.signal.aborted) return
+      probeResult.value = null
+      probeState.value = 'unsupported'
+    })
+}
+
+// URL-Wechsel invalidiert eine laufende / abgeschlossene Probe. Neustart wird
+// vom expanded-watcher unten übernommen, wenn der Accordion offen ist.
 watch(
   () => props.url,
-  (nextUrl) => {
+  () => {
     cancelProbe()
-    const trimmed = nextUrl?.trim() ?? ''
-    if (!trimmed || !props.onBeginOAuth) {
-      probeState.value = 'idle'
-      probeResult.value = null
-      return
-    }
-    // Debounce so typing in the URL field doesn't fire a probe per keystroke.
-    probeTimer = setTimeout(() => {
-      const controller = new AbortController()
-      probeAbort = controller
-      probeState.value = 'checking'
-      probeResult.value = null
-      probeOAuthSupport(trimmed, controller.signal)
-        .then((result) => {
-          if (controller.signal.aborted) return
-          probeResult.value = result
-          probeState.value = result.supported ? 'supported' : 'unsupported'
-        })
-        .catch(() => {
-          if (controller.signal.aborted) return
-          probeResult.value = null
-          probeState.value = 'unsupported'
-        })
-    }, 400)
+    probeState.value = 'idle'
+    probeResult.value = null
+    probedUrl = null
   },
-  { immediate: true },
 )
 
 onBeforeUnmount(cancelProbe)
@@ -192,6 +191,21 @@ const endpointStatusLabel: Record<string, string> = {
 }
 
 const expanded = ref<string[]>([])
+
+// Auth-Accordion öffnen = lazy probe auslösen, sofern OAuth überhaupt noch
+// nicht bekannt (kein gespeicherter Token + URL + Probe-Callback verdrahtet).
+watch(
+  [expanded, () => props.url, canStartOAuth],
+  ([isOpen, nextUrl, canProbe]) => {
+    if (!isOpen.includes('auth')) return
+    if (!canProbe) return
+    const trimmed = nextUrl?.trim() ?? ''
+    if (!trimmed) return
+    if (probedUrl === trimmed && probeState.value !== 'idle') return
+    runProbe(trimmed)
+  },
+)
+
 const showBearer = ref(false)
 const visibleValueIndexes = ref<Set<number>>(new Set())
 
