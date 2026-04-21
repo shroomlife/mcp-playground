@@ -20,7 +20,7 @@ import {
 import InstallToClaudeCode from './InstallToClaudeCode.vue'
 import ThemeToggle from './ThemeToggle.vue'
 import { suggestServerName } from '~/lib/claudeCodeInstall'
-import { capabilityInfo, activeSubFlags } from '~/lib/capabilityCopy'
+import { capabilityInfo, describeCapability } from '~/lib/capabilityCopy'
 import type { AuthHeader, ServerSummary, TransportKind } from '~/composables/useMcpPlayground'
 
 const props = defineProps<{
@@ -44,13 +44,23 @@ const emit = defineEmits<{
   disconnect: []
 }>()
 
-// Pre-compute lookup + sub-flags once per caps change — das Template rendert
-// Title, Description und Flags aus einem Eintrag, kein Triple-Call im v-for.
+// Pre-compute lookup + feature list once per caps change — das Template rendert
+// Title, Description und Features aus einem Eintrag, kein Triple-Call im v-for.
 const capabilityEntries = computed(() =>
   props.capabilities.map((cap) => {
     const info = capabilityInfo(cap)
     const entry = props.capabilityDetails?.[cap]
-    return { key: cap, info, flags: activeSubFlags(entry, info) }
+    const features = describeCapability(cap, entry, info)
+    return {
+      key: cap,
+      info,
+      features,
+      featuresTitle: info.listsFeatureKeys
+        ? features.length > 0
+          ? 'Vom Server deklarierte Features'
+          : 'Keine Features deklariert'
+        : null,
+    }
   }),
 )
 
@@ -217,25 +227,62 @@ onBeforeUnmount(() => {
           <TooltipPortal>
             <TooltipContent
               :side-offset="6"
-              class="z-50 max-w-[320px] p-2.5 bg-fg text-bg rounded-md shadow-lg text-[11.5px] leading-[1.45] data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0"
+              class="z-50 max-w-[360px] p-3 bg-fg text-bg rounded-lg shadow-lg text-[12px] leading-[1.5] data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0"
             >
-              <div class="font-semibold font-sans mb-1">
+              <div class="font-semibold font-sans mb-1.5 text-[13px]">
                 {{ entry.info.title }}
               </div>
               <div class="font-sans opacity-90">
                 {{ entry.info.description }}
               </div>
+              <div
+                v-if="entry.info.tabHint"
+                class="mt-1.5 font-sans text-[11.5px] opacity-70"
+              >
+                {{ entry.info.tabHint }}
+              </div>
+              <!-- Feature-Liste: known sub-flags (listChanged, subscribe) ODER
+                   hersteller-deklarierte Feature-Keys (experimental, extensions). -->
+              <template v-if="entry.info.listsFeatureKeys">
+                <div class="mt-2.5 pt-2 border-t border-bg/20">
+                  <div class="font-sans text-[11px] uppercase tracking-wide opacity-60 mb-1">
+                    {{ entry.featuresTitle }}
+                  </div>
+                  <ul
+                    v-if="entry.features.length > 0"
+                    class="space-y-1 font-mono text-[11.5px]"
+                  >
+                    <li
+                      v-for="feature in entry.features"
+                      :key="feature.key"
+                      class="flex items-start gap-1.5"
+                    >
+                      <span class="shrink-0 opacity-50">›</span>
+                      <span class="min-w-0 break-all">
+                        <span>{{ feature.label }}</span>
+                        <span v-if="feature.hint" class="opacity-60"> · {{ feature.hint }}</span>
+                      </span>
+                    </li>
+                  </ul>
+                  <div
+                    v-else
+                    class="font-sans text-[11.5px] opacity-60 italic"
+                  >
+                    Server hat die Capability deklariert, aber kein Feature eingetragen.
+                  </div>
+                </div>
+              </template>
               <ul
-                v-if="entry.flags.length > 0"
-                class="mt-2 space-y-0.5 font-sans text-[11px] opacity-80"
+                v-else-if="entry.features.length > 0"
+                class="mt-2 space-y-1 font-sans text-[11.5px] opacity-80"
               >
                 <li
-                  v-for="flag in entry.flags"
-                  :key="flag.key"
+                  v-for="feature in entry.features"
+                  :key="feature.key"
                   class="flex items-start gap-1.5"
                 >
-                  <Check :size="11" class="shrink-0 mt-0.5 opacity-80" />
-                  <span>{{ flag.label }}</span>
+                  <Check :size="12" class="shrink-0 mt-0.5 opacity-80" />
+                  <span>{{ feature.label }}</span>
                 </li>
               </ul>
               <TooltipArrow class="fill-fg" />

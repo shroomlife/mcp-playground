@@ -199,6 +199,7 @@ const visibleValueIndexes = ref<Set<number>>(new Set())
 const tokenDetailsOpen = ref(false)
 const showAccessToken = ref(false)
 const showRefreshToken = ref(false)
+const showCurlToken = ref(false)
 const copiedField = ref<string | null>(null)
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -307,11 +308,24 @@ const tokenTypeValue = computed(() => session.value?.tokens?.token_type ?? '')
 const scopeValue = computed(() => session.value?.tokens?.scope ?? '')
 const clientIdValue = computed(() => session.value?.client?.client_id ?? '')
 
-const curlSnippet = computed(() => {
+const curlSnippetRaw = computed(() => {
   const u = props.url?.trim()
   const token = accessTokenValue.value
   if (!u || !token) return ''
   return `curl -H "Authorization: Bearer ${token}" "${u}"`
+})
+
+// Der sichtbare Snippet masked den Token standardmäßig mit einem $ACCESS_TOKEN-
+// Platzhalter, damit der Klartext nicht neben den maskierten Eye-Fields im UI
+// liegt. Copy-Button kopiert immer den echten Snippet — das ist der bewusste
+// Action-Moment.
+const CURL_TOKEN_PLACEHOLDER = '$ACCESS_TOKEN'
+const curlSnippetDisplay = computed(() => {
+  const u = props.url?.trim()
+  const token = accessTokenValue.value
+  if (!u || !token) return ''
+  const shown = showCurlToken.value ? token : CURL_TOKEN_PLACEHOLDER
+  return `curl -H "Authorization: Bearer ${shown}" "${u}"`
 })
 
 // Manual header visibility: hidden by default when OAuth is active (the panel then
@@ -406,14 +420,14 @@ function updateValue(index: number, value: string) {
           <!-- OAuth status (only shown when tokens exist for the current URL) -->
           <div
             v-if="oauthActive"
-            class="pt-3.5 space-y-2"
+            class="pt-3.5 space-y-3"
           >
-            <div class="flex items-center justify-between gap-2 p-2.5 bg-accent-soft/60 border border-accent/20 rounded-md">
-              <div class="flex items-start gap-2 min-w-0">
-                <CheckCircle2 :size="14" class="text-accent shrink-0 mt-0.5" />
+            <div class="flex items-center justify-between gap-3 p-3 bg-accent-soft/60 border border-accent/20 rounded-lg">
+              <div class="flex items-start gap-2.5 min-w-0">
+                <CheckCircle2 :size="16" class="text-accent shrink-0 mt-0.5" />
                 <div class="min-w-0">
-                  <div class="text-[12px] font-medium text-fg">Über OAuth angemeldet</div>
-                  <div class="text-[11px] text-fg-muted mt-0.5">
+                  <div class="text-[13px] font-medium text-fg">Über OAuth angemeldet</div>
+                  <div class="text-[12px] text-fg-muted mt-1 leading-[1.5]">
                     Tokens liegen nur in dieser Browser-Session. Die manuellen Felder unten
                     werden ignoriert, solange OAuth aktiv ist.
                   </div>
@@ -422,47 +436,50 @@ function updateValue(index: number, value: string) {
               <button
                 type="button"
                 :disabled="disabled"
-                class="focus-ring shrink-0 inline-flex items-center gap-1.5 h-7 px-2.5 bg-surface border border-border-strong rounded-md text-[11px] text-fg-2 hover:text-danger hover:border-danger/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                class="focus-ring shrink-0 inline-flex items-center gap-1.5 h-8 px-3 bg-surface border border-border-strong rounded-md text-[12px] text-fg-2 hover:text-danger hover:border-danger/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 @click="logoutOAuth"
               >
-                <LogOut :size="11" />
+                <LogOut :size="13" />
                 Abmelden
               </button>
             </div>
 
             <!-- Token-Inspektor: collapse so it doesn't dominate the panel by default,
                  but all details (access, refresh, scope, expiry, client) are one click
-                 away — including a ready-to-paste curl line. Values are masked by
-                 default and every field has its own Copy-Button. -->
-            <CollapsibleRoot v-model:open="tokenDetailsOpen" class="bg-surface-2/50 border border-border rounded-md overflow-hidden">
+                 away — including a ready-to-paste curl line. Tokens sind in allen
+                 Ansichten maskiert; Eye zeigt, Copy kopiert bewusst den Klartext. -->
+            <CollapsibleRoot
+              v-model:open="tokenDetailsOpen"
+              class="bg-surface-2/40 border border-border rounded-lg overflow-hidden"
+            >
               <CollapsibleTrigger
-                class="focus-ring w-full flex items-center gap-2 px-2.5 py-2 text-[11.5px] text-fg-2 hover:text-fg transition-colors"
+                class="focus-ring w-full flex items-center gap-2.5 px-4 py-3 text-[13px] text-fg-2 hover:text-fg transition-colors"
               >
-                <Info :size="12" class="text-accent shrink-0" />
+                <Info :size="14" class="text-accent shrink-0" />
                 <span class="font-medium">Token-Details</span>
                 <span
                   v-if="tokenExpiry?.expired"
-                  class="inline-flex items-center h-4 px-1.5 bg-danger-soft text-danger rounded text-[10px] font-medium"
+                  class="inline-flex items-center h-5 px-2 bg-danger-soft text-danger rounded text-[11px] font-medium"
                   title="Access-Token ist abgelaufen"
                 >abgelaufen</span>
                 <span
                   v-else-if="tokenExpiry?.critical"
-                  class="inline-flex items-center h-4 px-1.5 bg-warning-soft text-warning rounded text-[10px] font-medium"
+                  class="inline-flex items-center h-5 px-2 bg-warning-soft text-warning rounded text-[11px] font-medium"
                   :title="`Ablauf ${tokenExpiry.relative}`"
                 >läuft bald ab</span>
                 <ChevronDown
-                  :size="12"
+                  :size="14"
                   class="ml-auto text-fg-muted transition-transform"
                   :class="{ 'rotate-180': tokenDetailsOpen }"
                 />
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <div class="p-3 pt-0 space-y-2.5 border-t border-border">
+                <div class="p-4 pt-0 space-y-4 border-t border-border">
                   <!-- Expiry row (shows only when expires_in is known) -->
                   <div
                     v-if="tokenExpiry"
                     :class="[
-                      'flex items-center gap-2 px-2.5 py-1.5 rounded border text-[11px]',
+                      'flex items-center gap-2 px-3 py-2 rounded-md border text-[12.5px]',
                       tokenExpiry.expired
                         ? 'bg-danger-soft border-danger/30 text-danger'
                         : tokenExpiry.critical
@@ -470,37 +487,37 @@ function updateValue(index: number, value: string) {
                           : 'bg-surface border-border text-fg-2',
                     ]"
                   >
-                    <AlertTriangle v-if="tokenExpiry.expired || tokenExpiry.critical" :size="12" class="shrink-0" />
-                    <CheckCircle2 v-else :size="12" class="shrink-0 text-success" />
+                    <AlertTriangle v-if="tokenExpiry.expired || tokenExpiry.critical" :size="14" class="shrink-0" />
+                    <CheckCircle2 v-else :size="14" class="shrink-0 text-success" />
                     <span class="font-medium">Gültig bis</span>
                     <span class="font-mono">{{ tokenExpiry.absolute }}</span>
                     <span class="text-fg-muted">· {{ tokenExpiry.relative }}</span>
                   </div>
 
                   <!-- Access-Token row -->
-                  <div v-if="accessTokenValue">
-                    <div class="flex items-center justify-between gap-2 mb-1">
-                      <label class="text-[11px] uppercase tracking-wide text-fg-muted font-medium">
-                        Access Token
+                  <div v-if="accessTokenValue" class="space-y-1.5">
+                    <div class="flex items-center justify-between gap-2">
+                      <label class="text-[12.5px] font-medium text-fg-2">
+                        Access-Token
                       </label>
-                      <div class="flex items-center gap-1.5">
+                      <div class="flex items-center gap-1">
                         <button
                           type="button"
-                          class="focus-ring inline-flex items-center gap-1 text-[11px] text-fg-muted hover:text-fg"
+                          class="focus-ring inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-[12px] text-fg-muted hover:text-fg hover:bg-surface-2"
                           @click="showAccessToken = !showAccessToken"
                         >
-                          <EyeOff v-if="showAccessToken" :size="11" />
-                          <Eye v-else :size="11" />
+                          <EyeOff v-if="showAccessToken" :size="13" />
+                          <Eye v-else :size="13" />
                           {{ showAccessToken ? 'verbergen' : 'anzeigen' }}
                         </button>
                         <button
                           type="button"
-                          class="focus-ring inline-flex items-center gap-1 text-[11px] text-fg-muted hover:text-fg"
+                          class="focus-ring inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-[12px] text-fg-muted hover:text-fg hover:bg-surface-2"
                           :aria-label="copiedField === 'access' ? 'kopiert' : 'Access-Token kopieren'"
                           @click="copyValue('access', accessTokenValue)"
                         >
-                          <Check v-if="copiedField === 'access'" :size="11" class="text-success" />
-                          <Copy v-else :size="11" />
+                          <Check v-if="copiedField === 'access'" :size="13" class="text-success" />
+                          <Copy v-else :size="13" />
                           {{ copiedField === 'access' ? 'kopiert' : 'kopieren' }}
                         </button>
                       </div>
@@ -510,13 +527,16 @@ function updateValue(index: number, value: string) {
                       :type="showAccessToken ? 'text' : 'password'"
                       readonly
                       spellcheck="false"
-                      class="focus-ring w-full h-8 px-2 bg-surface border border-border rounded font-mono text-[11.5px] text-fg select-all"
+                      class="focus-ring w-full h-10 px-3 bg-surface border border-border rounded-md font-mono text-[12.5px] text-fg select-all"
                       @focus="($event.target as HTMLInputElement).select()"
                     />
                   </div>
 
                   <!-- Metadata grid (token_type, scope, client_id, issued_at) -->
-                  <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11px] items-center">
+                  <dl
+                    v-if="tokenTypeValue || scopeValue || clientIdValue || clientIdIssuedAtLabel"
+                    class="grid grid-cols-[120px_1fr] gap-x-4 gap-y-2 text-[12.5px] items-center"
+                  >
                     <template v-if="tokenTypeValue">
                       <dt class="text-fg-muted">Token-Typ</dt>
                       <dd class="font-mono text-fg-2">{{ tokenTypeValue }}</dd>
@@ -527,18 +547,19 @@ function updateValue(index: number, value: string) {
                     </template>
                     <template v-if="clientIdValue">
                       <dt class="text-fg-muted">Client ID</dt>
-                      <dd class="flex items-center gap-1.5 min-w-0">
+                      <dd class="flex items-center gap-2 min-w-0">
                         <span class="font-mono text-fg-2 truncate flex-1" :title="clientIdValue">
                           {{ clientIdValue }}
                         </span>
                         <button
                           type="button"
-                          class="focus-ring shrink-0 inline-flex items-center gap-1 text-[10.5px] text-fg-muted hover:text-fg"
+                          class="focus-ring shrink-0 inline-flex items-center justify-center h-6 w-6 rounded-md text-fg-muted hover:text-fg hover:bg-surface-2"
                           :aria-label="copiedField === 'client' ? 'kopiert' : 'Client-ID kopieren'"
+                          :title="copiedField === 'client' ? 'kopiert' : 'Client-ID kopieren'"
                           @click="copyValue('client', clientIdValue)"
                         >
-                          <Check v-if="copiedField === 'client'" :size="10" class="text-success" />
-                          <Copy v-else :size="10" />
+                          <Check v-if="copiedField === 'client'" :size="12" class="text-success" />
+                          <Copy v-else :size="12" />
                         </button>
                       </dd>
                     </template>
@@ -549,29 +570,29 @@ function updateValue(index: number, value: string) {
                   </dl>
 
                   <!-- Refresh token (optional) -->
-                  <div v-if="refreshTokenValue">
-                    <div class="flex items-center justify-between gap-2 mb-1">
-                      <label class="text-[11px] uppercase tracking-wide text-fg-muted font-medium">
-                        Refresh Token
+                  <div v-if="refreshTokenValue" class="space-y-1.5">
+                    <div class="flex items-center justify-between gap-2">
+                      <label class="text-[12.5px] font-medium text-fg-2">
+                        Refresh-Token
                       </label>
-                      <div class="flex items-center gap-1.5">
+                      <div class="flex items-center gap-1">
                         <button
                           type="button"
-                          class="focus-ring inline-flex items-center gap-1 text-[11px] text-fg-muted hover:text-fg"
+                          class="focus-ring inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-[12px] text-fg-muted hover:text-fg hover:bg-surface-2"
                           @click="showRefreshToken = !showRefreshToken"
                         >
-                          <EyeOff v-if="showRefreshToken" :size="11" />
-                          <Eye v-else :size="11" />
+                          <EyeOff v-if="showRefreshToken" :size="13" />
+                          <Eye v-else :size="13" />
                           {{ showRefreshToken ? 'verbergen' : 'anzeigen' }}
                         </button>
                         <button
                           type="button"
-                          class="focus-ring inline-flex items-center gap-1 text-[11px] text-fg-muted hover:text-fg"
+                          class="focus-ring inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-[12px] text-fg-muted hover:text-fg hover:bg-surface-2"
                           :aria-label="copiedField === 'refresh' ? 'kopiert' : 'Refresh-Token kopieren'"
                           @click="copyValue('refresh', refreshTokenValue)"
                         >
-                          <Check v-if="copiedField === 'refresh'" :size="11" class="text-success" />
-                          <Copy v-else :size="11" />
+                          <Check v-if="copiedField === 'refresh'" :size="13" class="text-success" />
+                          <Copy v-else :size="13" />
                           {{ copiedField === 'refresh' ? 'kopiert' : 'kopieren' }}
                         </button>
                       </div>
@@ -581,34 +602,51 @@ function updateValue(index: number, value: string) {
                       :type="showRefreshToken ? 'text' : 'password'"
                       readonly
                       spellcheck="false"
-                      class="focus-ring w-full h-8 px-2 bg-surface border border-border rounded font-mono text-[11.5px] text-fg-2 select-all"
+                      class="focus-ring w-full h-10 px-3 bg-surface border border-border rounded-md font-mono text-[12.5px] text-fg-2 select-all"
                       @focus="($event.target as HTMLInputElement).select()"
                     />
                   </div>
 
-                  <!-- Curl snippet — enthält den Token im Klartext, nur bewusst kopieren -->
-                  <div v-if="curlSnippet">
-                    <div class="flex items-center justify-between gap-2 mb-1">
-                      <label class="text-[11px] uppercase tracking-wide text-fg-muted font-medium inline-flex items-center gap-1.5">
-                        <Terminal :size="11" />
+                  <!-- Curl snippet — Token standardmäßig maskiert, Eye zeigt, Copy kopiert Klartext -->
+                  <div v-if="curlSnippetDisplay" class="space-y-1.5">
+                    <div class="flex items-center justify-between gap-2">
+                      <label class="text-[12.5px] font-medium text-fg-2 inline-flex items-center gap-1.5">
+                        <Terminal :size="13" class="text-fg-muted" />
                         curl-Aufruf
                       </label>
-                      <button
-                        type="button"
-                        class="focus-ring inline-flex items-center gap-1 text-[11px] text-fg-muted hover:text-fg"
-                        :aria-label="copiedField === 'curl' ? 'kopiert' : 'curl-Zeile kopieren'"
-                        @click="copyValue('curl', curlSnippet)"
-                      >
-                        <Check v-if="copiedField === 'curl'" :size="11" class="text-success" />
-                        <Copy v-else :size="11" />
-                        {{ copiedField === 'curl' ? 'kopiert' : 'kopieren' }}
-                      </button>
+                      <div class="flex items-center gap-1">
+                        <button
+                          type="button"
+                          class="focus-ring inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-[12px] text-fg-muted hover:text-fg hover:bg-surface-2"
+                          @click="showCurlToken = !showCurlToken"
+                        >
+                          <EyeOff v-if="showCurlToken" :size="13" />
+                          <Eye v-else :size="13" />
+                          {{ showCurlToken ? 'verbergen' : 'anzeigen' }}
+                        </button>
+                        <button
+                          type="button"
+                          class="focus-ring inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-[12px] text-fg-muted hover:text-fg hover:bg-surface-2"
+                          :aria-label="copiedField === 'curl' ? 'kopiert' : 'curl mit Token kopieren'"
+                          @click="copyValue('curl', curlSnippetRaw)"
+                        >
+                          <Check v-if="copiedField === 'curl'" :size="13" class="text-success" />
+                          <Copy v-else :size="13" />
+                          {{ copiedField === 'curl' ? 'kopiert' : 'kopieren' }}
+                        </button>
+                      </div>
                     </div>
                     <pre
-                      class="font-mono text-[11px] leading-[1.5] whitespace-pre-wrap break-all text-fg-2 bg-surface border border-border rounded px-2 py-1.5"
-                    >{{ curlSnippet }}</pre>
-                    <p class="mt-1 text-[10.5px] text-fg-muted">
-                      Enthält deinen Access-Token im Klartext. Nur an vertrauenswürdige Stellen einfügen.
+                      class="font-mono text-[12px] leading-[1.55] whitespace-pre-wrap break-all text-fg-2 bg-surface border border-border rounded-md px-3 py-2.5"
+                    >{{ curlSnippetDisplay }}</pre>
+                    <p class="text-[11.5px] text-fg-muted leading-[1.5]">
+                      <template v-if="showCurlToken">
+                        Enthält deinen Access-Token im Klartext. Nur an vertrauenswürdige Stellen einfügen.
+                      </template>
+                      <template v-else>
+                        <code class="font-mono">{{ CURL_TOKEN_PLACEHOLDER }}</code> ist Platzhalter —
+                        Kopieren ersetzt ihn automatisch mit dem echten Token.
+                      </template>
                     </p>
                   </div>
                 </div>
@@ -784,19 +822,19 @@ function updateValue(index: number, value: string) {
           <div v-if="oauthActive">
             <button
               type="button"
-              class="focus-ring w-full flex items-center gap-2 px-2.5 py-2 text-[11.5px] text-fg-muted hover:text-fg-2 bg-surface-2/40 border border-border rounded-md transition-colors"
+              class="focus-ring w-full flex items-center gap-2.5 px-4 py-3 text-[13px] text-fg-2 hover:text-fg bg-surface-2/40 border border-border rounded-lg transition-colors"
               :aria-expanded="manualHeadersOpen"
               aria-controls="auth-manual-headers"
               @click="manualHeadersOpen = !manualHeadersOpen"
             >
-              <SlidersHorizontal :size="12" class="shrink-0" />
+              <SlidersHorizontal :size="14" class="shrink-0 text-fg-muted" />
               <span class="font-medium">Manuelle Header</span>
-              <span class="text-[10.5px] text-fg-subtle">
+              <span class="text-[11.5px] text-fg-muted">
                 — werden ignoriert, solange OAuth aktiv ist
               </span>
               <ChevronDown
-                :size="12"
-                class="ml-auto transition-transform"
+                :size="14"
+                class="ml-auto text-fg-muted transition-transform"
                 :class="{ 'rotate-180': manualHeadersOpen }"
               />
             </button>
