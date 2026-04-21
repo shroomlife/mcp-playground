@@ -48,11 +48,31 @@ export function suggestServerName(serverDisplayName: string | undefined, targetU
   }
 }
 
-export function buildMcpEntry(url: string, transport: TransportKind): Record<string, unknown> {
-  return {
-    type: transport,
-    url,
+export function buildMcpEntry(
+  url: string,
+  transport: TransportKind,
+  headers?: Record<string, string>,
+): Record<string, unknown> {
+  const entry: Record<string, unknown> = { type: transport, url }
+  if (headers && Object.keys(headers).length > 0) {
+    entry.headers = headers
   }
+  return entry
+}
+
+/**
+ * Derives the default env-var name from a server identifier. `github-mcp` → `MCP_GITHUB_TOKEN`.
+ * Non-alphanumeric characters collapse to underscores, runs of underscores are
+ * squashed, leading digits get a `MCP_` prefix so the result is a valid shell
+ * identifier on all platforms.
+ */
+export function suggestEnvVarName(serverName: string, suffix = 'TOKEN'): string {
+  const normalized = serverName
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+  const base = normalized ? `MCP_${normalized}` : 'MCP'
+  return `${base}_${suffix}`
 }
 
 export async function pickProjectDirectory(): Promise<FileSystemDirectoryHandle> {

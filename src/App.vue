@@ -15,7 +15,7 @@ import ServerRegistry from '~/components/ServerRegistry.vue'
 import ThemeToggle from '~/components/ThemeToggle.vue'
 import ElicitationDialog from '~/components/ElicitationDialog.vue'
 import { useTheme } from '~/composables/useTheme'
-import { consumePendingCallback } from '~/composables/useOAuth'
+import { consumePendingCallback, readOAuthSession, useOAuthRevision } from '~/composables/useOAuth'
 import { useRouter, type RouteState } from '~/composables/useRouter'
 import { useServerHistory } from '~/composables/useServerHistory'
 import { stashRecipe } from '~/composables/useRecipeInbox'
@@ -117,6 +117,18 @@ const bearerToken = computed(() => auth.getBearerToken())
 const activeAuthCount = computed(() => {
   return auth.headers.value.filter((h) => h.key.trim() && h.value).length
 })
+
+// OAuth-State wird im AuthConfigPanel angezeigt UND in den Install-Dialog
+// weitergegeben. Revision-Tick sorgt dafür, dass Login/Logout hier reaktiv ankommt.
+const oauthRevision = useOAuthRevision()
+const oauthAccessToken = computed(() => {
+  void oauthRevision.value
+  if (!url.value) return null
+  return readOAuthSession(url.value).tokens?.access_token ?? null
+})
+const installCustomHeaders = computed(() =>
+  auth.headers.value.filter((h) => h.key.trim().toLowerCase() !== 'authorization'),
+)
 
 /**
  * Bring the connection in line with the current route. Called on mount (with the
@@ -392,12 +404,16 @@ function handleDisconnect() {
       <ConnectedHeader
         :server="server"
         :capabilities="capabilityList"
+        :capability-details="server?.capabilities"
         :latency-ms="latencyMs"
         :counts="counts"
         :url="url"
         :transport="transportKind"
         :auth-header-count="activeAuthCount"
         :reconnecting="state === 'reconnecting'"
+        :install-bearer-token="bearerToken"
+        :install-custom-headers="installCustomHeaders"
+        :install-oauth-access-token="oauthAccessToken"
         @disconnect="handleDisconnect"
       />
 

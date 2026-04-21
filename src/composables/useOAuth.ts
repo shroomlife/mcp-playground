@@ -11,6 +11,7 @@
  * A single "pending" entry remembers which URL kicked off an in-flight flow so the callback
  * handler on mount can route the returned authorization code back to the right server.
  */
+import { ref, readonly, type Ref } from 'vue'
 import type { OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js'
 import type {
   FetchLike,
@@ -24,6 +25,22 @@ import type {
 
 const PREFIX = 'mcp-playground:oauth:'
 const PENDING_KEY = `${PREFIX}pending`
+const ISSUED_AT_SUFFIX = 'tokens-issued-at'
+
+/**
+ * Revision counter, bumped on every write/clear of OAuth session state. UI code that
+ * reads sessionStorage directly (which Vue can't observe) subscribes to this ref to
+ * trigger recomputes after `saveTokens` / `clearOAuth` / `saveClientInformation`.
+ */
+const oauthRevision = ref(0)
+
+function bumpRevision() {
+  oauthRevision.value += 1
+}
+
+export function useOAuthRevision(): Readonly<Ref<number>> {
+  return readonly(oauthRevision)
+}
 
 /**
  * In dev, the Vite proxy (`/api/mcp`) tunnels MCP + OAuth traffic through our
@@ -115,6 +132,46 @@ export function hasOAuthTokens(mcpUrl: string): boolean {
   const stored = safeGet(key(mcpUrl, 'tokens'))
   if (!stored || typeof stored !== 'object') return false
   return typeof (stored as OAuthTokens).access_token === 'string'
+}
+
+export interface OAuthSessionInfo {
+  tokens: OAuthTokens | null
+  client: OAuthClientInformationFull | null
+  /** Unix millis when `saveTokens` was last called — basis for the absolute expiry display. */
+  issuedAt: number | null
+}
+
+/**
+ * Read-only snapshot of the OAuth session for a given MCP URL. Does NOT subscribe to
+ * storage changes on its own — combine with `useOAuthRevision()` inside a `computed`
+ * if the caller needs reactive recomputation across save/clear.
+ */
+export function readOAuthSession(mcpUrl: string): OAuthSessionInfo {
+  const rawTokens = safeGet(key(mcpUrl, 'tokens'))
+  const rawClient = safeGet(key(mcpUrl, 'client'))
+  const rawIssuedAt = safeGetString(key(mcpUrl, ISSUED_AT_SUFFIX))
+
+  const tokens =
+    rawTokens &&
+    typeof rawTokens === 'object' &&
+    typeof (rawTokens as OAuthTokens).access_token === 'string'
+      ? (rawTokens as OAuthTokens)
+      : null
+
+  const client =
+    rawClient &&
+    typeof rawClient === 'object' &&
+    typeof (rawClient as OAuthClientInformationFull).client_id === 'string'
+      ? (rawClient as OAuthClientInformationFull)
+      : null
+
+  let issuedAt: number | null = null
+  if (rawIssuedAt) {
+    const parsed = Number(rawIssuedAt)
+    if (Number.isFinite(parsed) && parsed > 0) issuedAt = parsed
+  }
+
+  return { tokens, client, issuedAt }
 }
 
 /**
@@ -255,6 +312,8 @@ export function clearOAuth(mcpUrl: string): void {
   safeRemove(key(mcpUrl, 'tokens'))
   safeRemove(key(mcpUrl, 'verifier'))
   safeRemove(key(mcpUrl, 'state'))
+  safeRemove(key(mcpUrl, ISSUED_AT_SUFFIX))
+  bumpRevision()
 }
 
 function stripOAuthQuery(): void {
@@ -364,6 +423,7 @@ export function createOAuthProvider(
     },
     saveClientInformation(info: OAuthClientInformationMixed): void {
       safeSet(clientKey, info)
+      bumpRevision()
     },
     tokens(): OAuthTokens | undefined {
       const stored = safeGet(tokensKey)
@@ -371,6 +431,10 @@ export function createOAuthProvider(
     },
     saveTokens(tokens: OAuthTokens): void {
       safeSet(tokensKey, tokens)
+      // Track issue-time so the UI can render absolute expiry. SDK refresh flow
+      // calls saveTokens again with the new token set — issue-time updates too.
+      safeSetString(key(mcpUrl, ISSUED_AT_SUFFIX), String(Date.now()))
+      bumpRevision()
     },
     saveCodeVerifier(verifier: string): void {
       safeSetString(verifierKey, verifier)
@@ -389,8 +453,12 @@ export function createOAuthProvider(
         return
       }
       if (scope === 'client') safeRemove(clientKey)
-      if (scope === 'tokens') safeRemove(tokensKey)
+      if (scope === 'tokens') {
+        safeRemove(tokensKey)
+        safeRemove(key(mcpUrl, ISSUED_AT_SUFFIX))
+      }
       if (scope === 'verifier') safeRemove(verifierKey)
+      if (scope !== 'discovery') bumpRevision()
       // 'discovery' state we don't cache — nothing to invalidate
     },
   }

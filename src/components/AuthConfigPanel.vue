@@ -1,18 +1,24 @@
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import {
   AccordionRoot,
   AccordionItem,
   AccordionHeader,
   AccordionTrigger,
   AccordionContent,
+  CollapsibleRoot,
+  CollapsibleTrigger,
+  CollapsibleContent,
 } from 'reka-ui'
 import {
   AlertTriangle,
   ChevronDown,
   CheckCircle2,
+  Check,
+  Copy,
   Eye,
   EyeOff,
+  Info,
   KeyRound,
   Loader2,
   LogIn,
@@ -20,10 +26,17 @@ import {
   Plus,
   RotateCw,
   ShieldOff,
+  Terminal,
   X,
   ShieldAlert,
+  SlidersHorizontal,
 } from 'lucide-vue-next'
-import { clearOAuth, hasOAuthTokens, probeOAuthSupport } from '~/composables/useOAuth'
+import {
+  clearOAuth,
+  probeOAuthSupport,
+  readOAuthSession,
+  useOAuthRevision,
+} from '~/composables/useOAuth'
 import type { OAuthProbeResult } from '~/composables/useOAuth'
 import type { AuthHeader } from '~/composables/useMcpPlayground'
 
@@ -47,23 +60,24 @@ const emit = defineEmits<{
   reconnect: []
 }>()
 
-// hasOAuthTokens reads sessionStorage directly — Vue can't see that. We track a
-// local tick so the computed recomputes after logout. Tokens are only *saved* during
-// the OAuth callback flow, which arrives via a full page reload — so the initial
-// read on mount is always fresh.
-const oauthTick = ref(0)
-const oauthActive = computed(() => {
-  // Track the tick as a reactive dep so logoutOAuth below forces a recompute.
-  const _tick = oauthTick.value
-  void _tick
+// sessionStorage lives outside Vue's reactivity graph. `oauthRevision` gets bumped
+// on every save/clear in useOAuth, so anything that reads storage (session-info,
+// oauthActive) can subscribe to it to stay in sync with logout/refresh/login.
+const oauthRevision = useOAuthRevision()
+
+const session = computed(() => {
+  // Track the revision so Vue re-runs this computed on any OAuth state change.
+  void oauthRevision.value
   const u = props.url?.trim()
-  return Boolean(u) && hasOAuthTokens(u as string)
+  if (!u) return null
+  return readOAuthSession(u)
 })
+
+const oauthActive = computed(() => Boolean(session.value?.tokens?.access_token))
 
 function logoutOAuth() {
   if (!props.url) return
   clearOAuth(props.url)
-  oauthTick.value += 1
   emit('oauth-cleared')
 }
 
@@ -181,13 +195,145 @@ const expanded = ref<string[]>([])
 const showBearer = ref(false)
 const visibleValueIndexes = ref<Set<number>>(new Set())
 
-const activeCount = computed(() => {
-  const bearerActive = props.bearerToken.trim().length > 0 ? 1 : 0
-  const customActive = props.headers.filter(
-    (h) => h.key.trim().toLowerCase() !== 'authorization' && h.key.trim() && h.value,
-  ).length
-  return bearerActive + customActive
+// Token-Inspektor: Collapse + copy-feedback + masked-visibility for each field.
+const tokenDetailsOpen = ref(false)
+const showAccessToken = ref(false)
+const showRefreshToken = ref(false)
+const copiedField = ref<string | null>(null)
+let copyResetTimer: ReturnType<typeof setTimeout> | null = null
+
+async function copyValue(fieldId: string, value: string) {
+  if (!value) return
+  try {
+    await navigator.clipboard.writeText(value)
+    copiedField.value = fieldId
+    if (copyResetTimer) clearTimeout(copyResetTimer)
+    copyResetTimer = setTimeout(() => {
+      copiedField.value = null
+    }, 1500)
+  } catch {
+    // clipboard denied — no-op, user will notice the missing state flip
+  }
+}
+
+// Ticks once per 30s so the relative expiry countdown below stays fresh without
+// hammering the render loop. Only armed while the details are actually open.
+const now = ref(Date.now())
+let tickInterval: ReturnType<typeof setInterval> | null = null
+
+watch(tokenDetailsOpen, (open) => {
+  if (open) {
+    now.value = Date.now()
+    if (!tickInterval) {
+      tickInterval = setInterval(() => {
+        now.value = Date.now()
+      }, 30_000)
+    }
+  } else if (tickInterval) {
+    clearInterval(tickInterval)
+    tickInterval = null
+  }
 })
+
+onMounted(() => {
+  now.value = Date.now()
+})
+
+onBeforeUnmount(() => {
+  if (tickInterval) clearInterval(tickInterval)
+  if (copyResetTimer) clearTimeout(copyResetTimer)
+})
+
+interface TokenExpiry {
+  expiresAt: number
+  remainingMs: number
+  expired: boolean
+  critical: boolean
+  relative: string
+  absolute: string
+}
+
+function formatRelativeMs(ms: number): string {
+  const abs = Math.abs(ms)
+  const minutes = Math.round(abs / 60_000)
+  const hours = Math.floor(minutes / 60)
+  const leftover = minutes % 60
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24)
+    const hoursLeft = hours % 24
+    return hoursLeft > 0 ? `${days} Tg ${hoursLeft} Std` : `${days} Tg`
+  }
+  if (hours > 0) return leftover > 0 ? `${hours} Std ${leftover} min` : `${hours} Std`
+  if (minutes === 0) return 'unter 1 min'
+  return `${minutes} min`
+}
+
+const absoluteFormatter = new Intl.DateTimeFormat('de-DE', {
+  dateStyle: 'short',
+  timeStyle: 'short',
+})
+
+const tokenExpiry = computed<TokenExpiry | null>(() => {
+  const s = session.value
+  if (!s?.tokens || !s.issuedAt || typeof s.tokens.expires_in !== 'number') return null
+  const expiresAt = s.issuedAt + s.tokens.expires_in * 1000
+  const remainingMs = expiresAt - now.value
+  const expired = remainingMs <= 0
+  return {
+    expiresAt,
+    remainingMs,
+    expired,
+    critical: !expired && remainingMs < 5 * 60 * 1000,
+    relative: expired ? `abgelaufen vor ${formatRelativeMs(remainingMs)}` : `in ${formatRelativeMs(remainingMs)}`,
+    absolute: absoluteFormatter.format(new Date(expiresAt)),
+  }
+})
+
+function formatTimestampSeconds(ts: number | undefined): string | null {
+  if (typeof ts !== 'number' || !Number.isFinite(ts) || ts <= 0) return null
+  return absoluteFormatter.format(new Date(ts * 1000))
+}
+
+const clientIdIssuedAtLabel = computed(() =>
+  formatTimestampSeconds(session.value?.client?.client_id_issued_at),
+)
+
+// Flat accessors for the template — vue-tsc struggles to narrow optional chains
+// across nested v-if blocks, and the readonly input values never need to change
+// independently, so flattening keeps markup + types simple.
+const accessTokenValue = computed(() => session.value?.tokens?.access_token ?? '')
+const refreshTokenValue = computed(() => session.value?.tokens?.refresh_token ?? '')
+const tokenTypeValue = computed(() => session.value?.tokens?.token_type ?? '')
+const scopeValue = computed(() => session.value?.tokens?.scope ?? '')
+const clientIdValue = computed(() => session.value?.client?.client_id ?? '')
+
+const curlSnippet = computed(() => {
+  const u = props.url?.trim()
+  const token = accessTokenValue.value
+  if (!u || !token) return ''
+  return `curl -H "Authorization: Bearer ${token}" "${u}"`
+})
+
+// Manual header visibility: hidden by default when OAuth is active (the panel then
+// leads with the Token-Inspektor), otherwise shown like before. Watched so it snaps
+// closed right after a successful login and re-opens on logout.
+const manualHeadersOpen = ref(true)
+
+watch(
+  oauthActive,
+  (active) => {
+    manualHeadersOpen.value = !active
+  },
+  { immediate: true },
+)
+
+// Spiegelt, was tatsächlich Richtung Server gesendet wird: jeder gesetzte Header
+// (inkl. manuellem Authorization mit nicht-Bearer-Scheme wie Basic) zählt einmal.
+// Der Bearer-Shortcut landet auch hier drin (als Authorization-Header), also keine
+// Doppelzählung nötig.
+const activeCount = computed(
+  () => props.headers.filter((h) => h.key.trim() && h.value).length,
+)
 
 const customHeaders = computed(() =>
   props.headers
@@ -260,7 +406,7 @@ function updateValue(index: number, value: string) {
           <!-- OAuth status (only shown when tokens exist for the current URL) -->
           <div
             v-if="oauthActive"
-            class="pt-3.5"
+            class="pt-3.5 space-y-2"
           >
             <div class="flex items-center justify-between gap-2 p-2.5 bg-accent-soft/60 border border-accent/20 rounded-md">
               <div class="flex items-start gap-2 min-w-0">
@@ -283,6 +429,191 @@ function updateValue(index: number, value: string) {
                 Abmelden
               </button>
             </div>
+
+            <!-- Token-Inspektor: collapse so it doesn't dominate the panel by default,
+                 but all details (access, refresh, scope, expiry, client) are one click
+                 away — including a ready-to-paste curl line. Values are masked by
+                 default and every field has its own Copy-Button. -->
+            <CollapsibleRoot v-model:open="tokenDetailsOpen" class="bg-surface-2/50 border border-border rounded-md overflow-hidden">
+              <CollapsibleTrigger
+                class="focus-ring w-full flex items-center gap-2 px-2.5 py-2 text-[11.5px] text-fg-2 hover:text-fg transition-colors"
+              >
+                <Info :size="12" class="text-accent shrink-0" />
+                <span class="font-medium">Token-Details</span>
+                <span
+                  v-if="tokenExpiry?.expired"
+                  class="inline-flex items-center h-4 px-1.5 bg-danger-soft text-danger rounded text-[10px] font-medium"
+                  title="Access-Token ist abgelaufen"
+                >abgelaufen</span>
+                <span
+                  v-else-if="tokenExpiry?.critical"
+                  class="inline-flex items-center h-4 px-1.5 bg-warning-soft text-warning rounded text-[10px] font-medium"
+                  :title="`Ablauf ${tokenExpiry.relative}`"
+                >läuft bald ab</span>
+                <ChevronDown
+                  :size="12"
+                  class="ml-auto text-fg-muted transition-transform"
+                  :class="{ 'rotate-180': tokenDetailsOpen }"
+                />
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div class="p-3 pt-0 space-y-2.5 border-t border-border">
+                  <!-- Expiry row (shows only when expires_in is known) -->
+                  <div
+                    v-if="tokenExpiry"
+                    :class="[
+                      'flex items-center gap-2 px-2.5 py-1.5 rounded border text-[11px]',
+                      tokenExpiry.expired
+                        ? 'bg-danger-soft border-danger/30 text-danger'
+                        : tokenExpiry.critical
+                          ? 'bg-warning-soft border-warning/30 text-warning'
+                          : 'bg-surface border-border text-fg-2',
+                    ]"
+                  >
+                    <AlertTriangle v-if="tokenExpiry.expired || tokenExpiry.critical" :size="12" class="shrink-0" />
+                    <CheckCircle2 v-else :size="12" class="shrink-0 text-success" />
+                    <span class="font-medium">Gültig bis</span>
+                    <span class="font-mono">{{ tokenExpiry.absolute }}</span>
+                    <span class="text-fg-muted">· {{ tokenExpiry.relative }}</span>
+                  </div>
+
+                  <!-- Access-Token row -->
+                  <div v-if="accessTokenValue">
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                      <label class="text-[11px] uppercase tracking-wide text-fg-muted font-medium">
+                        Access Token
+                      </label>
+                      <div class="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          class="focus-ring inline-flex items-center gap-1 text-[11px] text-fg-muted hover:text-fg"
+                          @click="showAccessToken = !showAccessToken"
+                        >
+                          <EyeOff v-if="showAccessToken" :size="11" />
+                          <Eye v-else :size="11" />
+                          {{ showAccessToken ? 'verbergen' : 'anzeigen' }}
+                        </button>
+                        <button
+                          type="button"
+                          class="focus-ring inline-flex items-center gap-1 text-[11px] text-fg-muted hover:text-fg"
+                          :aria-label="copiedField === 'access' ? 'kopiert' : 'Access-Token kopieren'"
+                          @click="copyValue('access', accessTokenValue)"
+                        >
+                          <Check v-if="copiedField === 'access'" :size="11" class="text-success" />
+                          <Copy v-else :size="11" />
+                          {{ copiedField === 'access' ? 'kopiert' : 'kopieren' }}
+                        </button>
+                      </div>
+                    </div>
+                    <input
+                      :value="accessTokenValue"
+                      :type="showAccessToken ? 'text' : 'password'"
+                      readonly
+                      spellcheck="false"
+                      class="focus-ring w-full h-8 px-2 bg-surface border border-border rounded font-mono text-[11.5px] text-fg select-all"
+                      @focus="($event.target as HTMLInputElement).select()"
+                    />
+                  </div>
+
+                  <!-- Metadata grid (token_type, scope, client_id, issued_at) -->
+                  <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11px] items-center">
+                    <template v-if="tokenTypeValue">
+                      <dt class="text-fg-muted">Token-Typ</dt>
+                      <dd class="font-mono text-fg-2">{{ tokenTypeValue }}</dd>
+                    </template>
+                    <template v-if="scopeValue">
+                      <dt class="text-fg-muted self-start pt-0.5">Scope</dt>
+                      <dd class="font-mono text-fg-2 break-all">{{ scopeValue }}</dd>
+                    </template>
+                    <template v-if="clientIdValue">
+                      <dt class="text-fg-muted">Client ID</dt>
+                      <dd class="flex items-center gap-1.5 min-w-0">
+                        <span class="font-mono text-fg-2 truncate flex-1" :title="clientIdValue">
+                          {{ clientIdValue }}
+                        </span>
+                        <button
+                          type="button"
+                          class="focus-ring shrink-0 inline-flex items-center gap-1 text-[10.5px] text-fg-muted hover:text-fg"
+                          :aria-label="copiedField === 'client' ? 'kopiert' : 'Client-ID kopieren'"
+                          @click="copyValue('client', clientIdValue)"
+                        >
+                          <Check v-if="copiedField === 'client'" :size="10" class="text-success" />
+                          <Copy v-else :size="10" />
+                        </button>
+                      </dd>
+                    </template>
+                    <template v-if="clientIdIssuedAtLabel">
+                      <dt class="text-fg-muted">Registriert</dt>
+                      <dd class="font-mono text-fg-2">{{ clientIdIssuedAtLabel }}</dd>
+                    </template>
+                  </dl>
+
+                  <!-- Refresh token (optional) -->
+                  <div v-if="refreshTokenValue">
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                      <label class="text-[11px] uppercase tracking-wide text-fg-muted font-medium">
+                        Refresh Token
+                      </label>
+                      <div class="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          class="focus-ring inline-flex items-center gap-1 text-[11px] text-fg-muted hover:text-fg"
+                          @click="showRefreshToken = !showRefreshToken"
+                        >
+                          <EyeOff v-if="showRefreshToken" :size="11" />
+                          <Eye v-else :size="11" />
+                          {{ showRefreshToken ? 'verbergen' : 'anzeigen' }}
+                        </button>
+                        <button
+                          type="button"
+                          class="focus-ring inline-flex items-center gap-1 text-[11px] text-fg-muted hover:text-fg"
+                          :aria-label="copiedField === 'refresh' ? 'kopiert' : 'Refresh-Token kopieren'"
+                          @click="copyValue('refresh', refreshTokenValue)"
+                        >
+                          <Check v-if="copiedField === 'refresh'" :size="11" class="text-success" />
+                          <Copy v-else :size="11" />
+                          {{ copiedField === 'refresh' ? 'kopiert' : 'kopieren' }}
+                        </button>
+                      </div>
+                    </div>
+                    <input
+                      :value="refreshTokenValue"
+                      :type="showRefreshToken ? 'text' : 'password'"
+                      readonly
+                      spellcheck="false"
+                      class="focus-ring w-full h-8 px-2 bg-surface border border-border rounded font-mono text-[11.5px] text-fg-2 select-all"
+                      @focus="($event.target as HTMLInputElement).select()"
+                    />
+                  </div>
+
+                  <!-- Curl snippet — enthält den Token im Klartext, nur bewusst kopieren -->
+                  <div v-if="curlSnippet">
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                      <label class="text-[11px] uppercase tracking-wide text-fg-muted font-medium inline-flex items-center gap-1.5">
+                        <Terminal :size="11" />
+                        curl-Aufruf
+                      </label>
+                      <button
+                        type="button"
+                        class="focus-ring inline-flex items-center gap-1 text-[11px] text-fg-muted hover:text-fg"
+                        :aria-label="copiedField === 'curl' ? 'kopiert' : 'curl-Zeile kopieren'"
+                        @click="copyValue('curl', curlSnippet)"
+                      >
+                        <Check v-if="copiedField === 'curl'" :size="11" class="text-success" />
+                        <Copy v-else :size="11" />
+                        {{ copiedField === 'curl' ? 'kopiert' : 'kopieren' }}
+                      </button>
+                    </div>
+                    <pre
+                      class="font-mono text-[11px] leading-[1.5] whitespace-pre-wrap break-all text-fg-2 bg-surface border border-border rounded px-2 py-1.5"
+                    >{{ curlSnippet }}</pre>
+                    <p class="mt-1 text-[10.5px] text-fg-muted">
+                      Enthält deinen Access-Token im Klartext. Nur an vertrauenswürdige Stellen einfügen.
+                    </p>
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </CollapsibleRoot>
           </div>
 
           <!-- OAuth section (no tokens yet + url present + onBeginOAuth wired) -->
@@ -447,6 +778,36 @@ function updateValue(index: number, value: string) {
             </div>
           </div>
 
+          <!-- Manuelle Header — bei aktivem OAuth hinter Toggle verborgen, sonst direkt
+               sichtbar. v-if (nicht v-show) entfernt die Inputs komplett aus dem DOM,
+               damit sie im eingeklappten Zustand nicht per Tab fokussierbar bleiben. -->
+          <div v-if="oauthActive">
+            <button
+              type="button"
+              class="focus-ring w-full flex items-center gap-2 px-2.5 py-2 text-[11.5px] text-fg-muted hover:text-fg-2 bg-surface-2/40 border border-border rounded-md transition-colors"
+              :aria-expanded="manualHeadersOpen"
+              aria-controls="auth-manual-headers"
+              @click="manualHeadersOpen = !manualHeadersOpen"
+            >
+              <SlidersHorizontal :size="12" class="shrink-0" />
+              <span class="font-medium">Manuelle Header</span>
+              <span class="text-[10.5px] text-fg-subtle">
+                — werden ignoriert, solange OAuth aktiv ist
+              </span>
+              <ChevronDown
+                :size="12"
+                class="ml-auto transition-transform"
+                :class="{ 'rotate-180': manualHeadersOpen }"
+              />
+            </button>
+          </div>
+
+          <div
+            v-if="!oauthActive || manualHeadersOpen"
+            id="auth-manual-headers"
+            class="space-y-3.5"
+            :class="oauthActive ? 'pt-1' : ''"
+          >
           <!-- Bearer shortcut -->
           <div :class="oauthActive ? '' : 'pt-3.5'">
             <label
@@ -562,6 +923,7 @@ function updateValue(index: number, value: string) {
               </button>
             </div>
           </div>
+          </div><!-- /manual headers wrapper -->
 
           <!-- Reconnect action — only meaningful in Connected view. Sits inside the
                accordion so the compact header doesn't carry a second action button. -->

@@ -17,19 +17,22 @@ import {
   FileWarning,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
+  KeyRound,
   Loader2,
   Copy,
   Check,
   X,
   Info,
 } from 'lucide-vue-next'
-import type { TransportKind } from '~/composables/useMcpPlayground'
+import type { AuthHeader, TransportKind } from '~/composables/useMcpPlayground'
 import {
   isDirectoryPickerSupported,
   pickProjectDirectory,
   inspectMcpJson,
   installToClaudeCode,
   sanitizeServerName,
+  suggestEnvVarName,
   buildMcpEntry,
   CLIENT_TARGETS,
   type ClientTargetId,
@@ -41,6 +44,12 @@ const props = defineProps<{
   url: string
   transport: TransportKind
   suggestedName: string
+  /** Aktueller Bearer-Token aus dem AuthConfigPanel, wenn manuell gesetzt. */
+  bearerToken?: string | null
+  /** Custom-Header ohne Authorization, übernommen aus dem Playground-Auth-State. */
+  customHeaders?: AuthHeader[]
+  /** OAuth-Access-Token, wenn für diese URL ein OAuth-Login läuft. */
+  oauthAccessToken?: string | null
 }>()
 
 const activeClientId = ref<ClientTargetId>('claude-code')
@@ -62,13 +71,84 @@ const copied = ref(false)
 
 const supported = isDirectoryPickerSupported()
 
-const entry = computed(() => buildMcpEntry(props.url, props.transport))
-const snippet = computed(() =>
-  activeClient.value.buildSnippet(sanitizeServerName(serverName.value), entry.value),
+// Which auth source to inherit — determined once from what's available. User can
+// switch. `none` means "don't write any headers", even if something is configured.
+type AuthSource = 'oauth' | 'bearer' | 'headers' | 'none'
+
+const hasOAuth = computed(() => Boolean(props.oauthAccessToken?.trim()))
+const hasBearer = computed(() => Boolean(props.bearerToken?.trim()))
+const hasCustomHeaders = computed(
+  () => (props.customHeaders?.filter((h) => h.key.trim() && h.value).length ?? 0) > 0,
 )
+const hasAnyAuth = computed(() => hasOAuth.value || hasBearer.value || hasCustomHeaders.value)
+
+const authSource = ref<AuthSource>('none')
+
+function pickDefaultAuthSource(): AuthSource {
+  if (hasOAuth.value) return 'oauth'
+  if (hasBearer.value) return 'bearer'
+  if (hasCustomHeaders.value) return 'headers'
+  return 'none'
+}
+
+type TokenMode = 'env' | 'inline'
+const tokenMode = ref<TokenMode>('env')
+const envVarName = ref('')
+const envVarEdited = ref(false)
 
 const nameClean = computed(() => sanitizeServerName(serverName.value))
 const nameValid = computed(() => nameClean.value.length > 0 && nameClean.value === serverName.value)
+
+// Keep env-var name in sync with server name unless the user has explicitly edited it.
+watch(
+  nameClean,
+  (next) => {
+    if (!envVarEdited.value) envVarName.value = suggestEnvVarName(next)
+  },
+  { immediate: true },
+)
+
+const envVarValid = computed(() => /^[A-Z_][A-Z0-9_]*$/.test(envVarName.value))
+
+/**
+ * Picks up the bearer/oauth token based on the selected source and wraps it as an
+ * `Authorization: Bearer …` header (or an `${ENV_VAR}` reference). Custom headers
+ * flow through verbatim (filtered to meaningful pairs).
+ */
+function buildInstallHeaders(): Record<string, string> | undefined {
+  const src = authSource.value
+  if (src === 'none') return undefined
+
+  const headers: Record<string, string> = {}
+
+  if (src === 'headers') {
+    const list = props.customHeaders ?? []
+    for (const h of list) {
+      const k = h.key.trim()
+      const v = h.value
+      if (k && v) headers[k] = v
+    }
+    return Object.keys(headers).length > 0 ? headers : undefined
+  }
+
+  // oauth + bearer both end up as `Authorization: Bearer …`.
+  const rawToken = src === 'oauth' ? props.oauthAccessToken?.trim() : props.bearerToken?.trim()
+  if (!rawToken) return undefined
+
+  const value =
+    tokenMode.value === 'env' && envVarValid.value
+      ? `Bearer \${${envVarName.value}}`
+      : `Bearer ${rawToken}`
+
+  headers.Authorization = value
+  return headers
+}
+
+const installHeaders = computed(() => buildInstallHeaders())
+const entry = computed(() => buildMcpEntry(props.url, props.transport, installHeaders.value))
+const snippet = computed(() =>
+  activeClient.value.buildSnippet(sanitizeServerName(serverName.value), entry.value),
+)
 
 watch(open, (isOpen) => {
   if (isOpen) {
@@ -78,6 +158,10 @@ watch(open, (isOpen) => {
     fileInfo.value = null
     result.value = null
     errorMessage.value = null
+    authSource.value = pickDefaultAuthSource()
+    tokenMode.value = 'env'
+    envVarEdited.value = false
+    envVarName.value = suggestEnvVarName(sanitizeServerName(props.suggestedName))
   }
 })
 
@@ -255,6 +339,125 @@ async function copySnippet() {
               <div class="font-mono text-fg uppercase">{{ transport }}</div>
               <div class="text-fg-muted">URL</div>
               <div class="font-mono text-fg break-all">{{ url }}</div>
+            </div>
+          </div>
+
+          <!-- Authentifizierung übernehmen (nur wenn im Playground was konfiguriert ist) -->
+          <div
+            v-if="hasAnyAuth"
+            class="p-3 bg-surface-2/60 border border-border rounded-lg space-y-2.5"
+          >
+            <div class="flex items-center gap-2">
+              <KeyRound :size="13" class="text-accent" />
+              <div class="text-[12.5px] font-medium text-fg">Authentifizierung übernehmen</div>
+            </div>
+
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                v-if="hasOAuth"
+                type="button"
+                class="focus-ring inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[11.5px] border transition-colors"
+                :class="authSource === 'oauth'
+                  ? 'bg-accent text-white border-accent'
+                  : 'bg-surface text-fg-2 border-border hover:text-fg'"
+                @click="authSource = 'oauth'"
+              >OAuth-Access-Token</button>
+              <button
+                v-if="hasBearer"
+                type="button"
+                class="focus-ring inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[11.5px] border transition-colors"
+                :class="authSource === 'bearer'
+                  ? 'bg-accent text-white border-accent'
+                  : 'bg-surface text-fg-2 border-border hover:text-fg'"
+                @click="authSource = 'bearer'"
+              >Bearer-Token</button>
+              <button
+                v-if="hasCustomHeaders"
+                type="button"
+                class="focus-ring inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[11.5px] border transition-colors"
+                :class="authSource === 'headers'
+                  ? 'bg-accent text-white border-accent'
+                  : 'bg-surface text-fg-2 border-border hover:text-fg'"
+                @click="authSource = 'headers'"
+              >Custom-Header</button>
+              <button
+                type="button"
+                class="focus-ring inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[11.5px] border transition-colors"
+                :class="authSource === 'none'
+                  ? 'bg-fg text-bg border-fg'
+                  : 'bg-surface text-fg-2 border-border hover:text-fg'"
+                @click="authSource = 'none'"
+              >keine Auth</button>
+            </div>
+
+            <!-- Token-Mode + ENV-Var-Input (nur bei oauth/bearer) -->
+            <div
+              v-if="authSource === 'oauth' || authSource === 'bearer'"
+              class="space-y-2 pt-1"
+            >
+              <div class="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  class="focus-ring inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[11.5px] border transition-colors"
+                  :class="tokenMode === 'env'
+                    ? 'bg-success-soft text-success border-success/40'
+                    : 'bg-surface text-fg-2 border-border hover:text-fg'"
+                  @click="tokenMode = 'env'"
+                >
+                  via Umgebungsvariable
+                  <span class="text-[10px] uppercase tracking-wide opacity-70">empfohlen</span>
+                </button>
+                <button
+                  type="button"
+                  class="focus-ring inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[11.5px] border transition-colors"
+                  :class="tokenMode === 'inline'
+                    ? 'bg-warning-soft text-warning border-warning/40'
+                    : 'bg-surface text-fg-2 border-border hover:text-fg'"
+                  @click="tokenMode = 'inline'"
+                >Token direkt einbetten</button>
+              </div>
+
+              <div v-if="tokenMode === 'env'" class="space-y-1.5">
+                <label for="install-env" class="block text-[11.5px] text-fg-2">
+                  Name der Umgebungsvariable
+                </label>
+                <input
+                  id="install-env"
+                  v-model="envVarName"
+                  type="text"
+                  spellcheck="false"
+                  autocomplete="off"
+                  class="focus-ring w-full h-9 px-3 bg-surface border border-border-strong rounded-md font-mono text-[12.5px] text-fg focus:border-accent focus:outline-none"
+                  @input="envVarEdited = true"
+                />
+                <div v-if="!envVarValid" class="text-[11px] text-warning">
+                  Nur Großbuchstaben, Ziffern und Unterstriche erlaubt.
+                </div>
+                <div class="text-[11px] text-fg-muted leading-[1.5]">
+                  Die <code class="font-mono">.mcp.json</code> enthält nur den Platzhalter
+                  <code class="font-mono">${{ '{' }}{{ envVarName }}{{ '}' }}</code>. Vor dem Start
+                  von Claude Code:
+                  <code class="font-mono">export {{ envVarName }}=&lt;token&gt;</code>
+                  (bzw. <code class="font-mono">$env:{{ envVarName }}</code> in PowerShell).
+                </div>
+              </div>
+
+              <div
+                v-else
+                class="flex items-start gap-2 p-2 bg-warning-soft border border-warning/30 rounded-md text-[11.5px] text-fg-2"
+                role="alert"
+              >
+                <AlertTriangle :size="13" class="text-warning shrink-0 mt-0.5" />
+                <div class="leading-[1.4]">
+                  Der Token wird im Klartext in <code class="font-mono">.mcp.json</code>
+                  geschrieben. Datei sollte danach nicht eingecheckt werden.
+                </div>
+              </div>
+            </div>
+
+            <div v-else-if="authSource === 'headers'" class="text-[11px] text-fg-muted leading-[1.5]">
+              Alle Header aus dem Playground-Auth-Panel werden 1:1 übernommen.
+              Werte landen im Klartext in der Datei.
             </div>
           </div>
 

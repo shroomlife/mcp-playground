@@ -31,6 +31,35 @@ bun run build         # typecheck + production build
 Keine Tests (bewusst, Prototyp). Typecheck + Lint sind die Quality Gates — beide müssen
 grün sein vor einem Commit.
 
+## Release-Workflow
+
+Wenn eine in sich geschlossene Feature- oder Fix-Runde abgeschlossen ist, gilt diese Choreografie:
+
+1. **Deep-Dive Review** — geänderte Dateien lesen und über einen frisch-gestarteten
+   `code-reviewer` Subagent prüfen lassen. Must-fix Findings werden vor dem Commit erledigt,
+   Nice-to-have falls sinnvoll dazu.
+2. **Version-Bump** — SemVer:
+   - Patch (`0.2.4 → 0.2.5`): UX-Polish, Bugfixes, kleine Feature-Erweiterungen ohne
+     Contract-Änderung.
+   - Minor (`0.2.x → 0.3.0`): erkennbar neues Feature, neue User-sichtbare Flächen.
+   - Major: gibt's für dieses Tool nicht (pre-1.0).
+3. **QA grün** — `bun run typecheck && bun run lint && bun run build` alle grün, bevor der
+   Commit rausgeht. Pre-commit-Hook läuft zusätzlich, verlass dich nicht darauf.
+4. **Commit-Message** — kurzer deutscher Subject mit Conventional-Commit-Präfix
+   (`feat`, `fix`, `refactor`, `docs`, `chore`, `ux`) + Version im Subject, z.B.
+   `feat(auth): v0.2.5 — OAuth-Token-Inspektor + Install übernimmt Auth`.
+   Body kurz halten: 2–5 Bulletpoints über die echten Änderungen. **Kein
+   `Co-Authored-By`-Trailer.**
+5. **Annotated Tag** — `git tag -a v<version> -m '<subject>'`, niemals lightweight.
+6. **Push** — `git push origin main && git push origin v<version>`. CI + GitHub-Pages-Deploy
+   triggern automatisch auf den main-Push, das Tag ist für die Release-Historie.
+7. **GitHub-Release** (optional, aber nice) — wenn das Feature sichtbar genug ist:
+   `gh release create v<version> --title '...' --notes '...'` mit den gleichen
+   Bulletpoints wie im Commit-Body. Für reine Patch-Releases nicht nötig.
+
+Der Flow passiert nur auf explizite User-Anfrage ("version up", "commit & push",
+"release"). Nicht selbstständig Tags schieben.
+
 Lint-Stack: ESLint 10 flat config (`eslint.config.ts`), `@vue/eslint-config-typescript`
 im `strict`-Preset, `eslint-plugin-vue` v10. Formatting-Rules sind bewusst aus —
 der Kompakt-Template-Style bleibt. Semantische Rules (`no-explicit-any`,

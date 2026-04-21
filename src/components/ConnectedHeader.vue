@@ -1,25 +1,58 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, useTemplateRef } from 'vue'
-import { Activity, LogOut, KeyRound, Wrench, FileText, MessageSquareText } from 'lucide-vue-next'
+import {
+  Activity,
+  LogOut,
+  KeyRound,
+  Wrench,
+  FileText,
+  MessageSquareText,
+  Check,
+} from 'lucide-vue-next'
+import {
+  TooltipProvider,
+  TooltipRoot,
+  TooltipTrigger,
+  TooltipPortal,
+  TooltipContent,
+  TooltipArrow,
+} from 'reka-ui'
 import InstallToClaudeCode from './InstallToClaudeCode.vue'
 import ThemeToggle from './ThemeToggle.vue'
 import { suggestServerName } from '~/lib/claudeCodeInstall'
-import type { ServerSummary, TransportKind } from '~/composables/useMcpPlayground'
+import { capabilityInfo, activeSubFlags } from '~/lib/capabilityCopy'
+import type { AuthHeader, ServerSummary, TransportKind } from '~/composables/useMcpPlayground'
 
 const props = defineProps<{
   server: ServerSummary | null
   capabilities: string[]
+  /** Raw capability map from the handshake — used for sub-flag lookups in tooltips. */
+  capabilityDetails?: Record<string, unknown>
   latencyMs: number | null
   counts: { tools: number; resources: number; prompts: number }
   url: string
   transport: TransportKind
   authHeaderCount?: number
   reconnecting?: boolean
+  /** Wird an den Install-Dialog weitergereicht, damit der Auth übernehmen kann. */
+  installBearerToken?: string | null
+  installCustomHeaders?: AuthHeader[]
+  installOauthAccessToken?: string | null
 }>()
 
 const emit = defineEmits<{
   disconnect: []
 }>()
+
+// Pre-compute lookup + sub-flags once per caps change — das Template rendert
+// Title, Description und Flags aus einem Eintrag, kein Triple-Call im v-for.
+const capabilityEntries = computed(() =>
+  props.capabilities.map((cap) => {
+    const info = capabilityInfo(cap)
+    const entry = props.capabilityDetails?.[cap]
+    return { key: cap, info, flags: activeSubFlags(entry, info) }
+  }),
+)
 
 const suggestedName = computed(() => suggestServerName(props.server?.name, props.url))
 
@@ -147,6 +180,9 @@ onBeforeUnmount(() => {
           :url="url"
           :transport="transport"
           :suggested-name="suggestedName"
+          :bearer-token="installBearerToken"
+          :custom-headers="installCustomHeaders"
+          :oauth-access-token="installOauthAccessToken"
         />
         <button
           type="button"
@@ -161,19 +197,52 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- Capability pills strip -->
-    <div
-      v-if="capabilities.length > 0"
-      class="mx-auto max-w-[1200px] px-6 md:px-10 pb-2.5 flex items-center gap-1.5 flex-wrap text-[11px]"
-    >
-      <span class="uppercase tracking-wide text-fg-subtle font-medium">Capabilities</span>
-      <span
-        v-for="cap in capabilities"
-        :key="cap"
-        class="font-mono text-fg-muted bg-surface border border-border rounded-sm px-1.5 py-0.5"
+    <!-- Capability pills strip — hover öffnet Tooltip mit deutscher Erklärung + aktiven Sub-Flags -->
+    <TooltipProvider :delay-duration="120" :skip-delay-duration="60">
+      <div
+        v-if="capabilityEntries.length > 0"
+        class="mx-auto max-w-[1200px] px-6 md:px-10 pb-2.5 flex items-center gap-1.5 flex-wrap text-[11px]"
       >
-        {{ cap }}
-      </span>
-    </div>
+        <span class="uppercase tracking-wide text-fg-subtle font-medium">Capabilities</span>
+        <TooltipRoot v-for="entry in capabilityEntries" :key="entry.key">
+          <TooltipTrigger as-child>
+            <button
+              type="button"
+              class="focus-ring font-mono text-fg-muted bg-surface border border-border rounded-sm px-1.5 py-0.5 hover:text-fg-2 hover:border-border-strong cursor-help decoration-dotted underline-offset-2 transition-colors"
+              :aria-label="`Erklärung zu ${entry.key}`"
+            >
+              {{ entry.key }}
+            </button>
+          </TooltipTrigger>
+          <TooltipPortal>
+            <TooltipContent
+              :side-offset="6"
+              class="z-50 max-w-[320px] p-2.5 bg-fg text-bg rounded-md shadow-lg text-[11.5px] leading-[1.45] data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0"
+            >
+              <div class="font-semibold font-sans mb-1">
+                {{ entry.info.title }}
+              </div>
+              <div class="font-sans opacity-90">
+                {{ entry.info.description }}
+              </div>
+              <ul
+                v-if="entry.flags.length > 0"
+                class="mt-2 space-y-0.5 font-sans text-[11px] opacity-80"
+              >
+                <li
+                  v-for="flag in entry.flags"
+                  :key="flag.key"
+                  class="flex items-start gap-1.5"
+                >
+                  <Check :size="11" class="shrink-0 mt-0.5 opacity-80" />
+                  <span>{{ flag.label }}</span>
+                </li>
+              </ul>
+              <TooltipArrow class="fill-fg" />
+            </TooltipContent>
+          </TooltipPortal>
+        </TooltipRoot>
+      </div>
+    </TooltipProvider>
   </header>
 </template>
