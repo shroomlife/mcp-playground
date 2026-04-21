@@ -117,7 +117,7 @@ const sortedCounts = computed(() => {
             v{{ preview.version }}
           </span>
           <span class="text-[10.5px] uppercase tracking-wide text-fg-subtle font-medium">
-            · {{ preview.source === 'server-card' ? 'Server Card' : 'Initialize-Probe' }}
+            · Initialize-Probe
           </span>
         </div>
         <p
@@ -154,17 +154,16 @@ const sortedCounts = computed(() => {
       </div>
     </div>
 
-    <!-- Empty: probe ran but no card and no 401 — could mean server just doesn't expose metadata,
-         not necessarily broken. Muted hint, not red. -->
+    <!-- Empty: probe ran aber kein Server-Info zurück — Server antwortet, liefert
+         aber keinen validen initialize-Response. Muted hint statt Rot. -->
     <div
       v-else-if="probeState === 'empty'"
       class="flex items-center gap-2 px-3.5 py-2.5 text-[11.5px] text-fg-muted"
     >
       <ShieldOff :size="12" class="shrink-0" />
       <span>
-        Keine Server-Metadaten verfügbar —
-        <span class="font-mono text-fg-2">.well-known/mcp-server-card</span>
-        fehlt. Verbindung versuchen für Details.
+        Keine Server-Metadaten aus dem <code class="font-mono">initialize</code>-Probe.
+        Beim Verbinden wird es neu versucht.
       </span>
     </div>
 

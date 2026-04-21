@@ -1,16 +1,11 @@
 /**
  * Best-effort "what's on the other side?" probe before the user hits Connect.
  *
- * Two strategies combined:
- *   1. **MCP Server Card** (`<origin>/.well-known/mcp-server-card`) — added in MCP
- *      spec 2.1 (2025-11). Returns a structured JSON document with name, description,
- *      capabilities, auth method, etc. without a live handshake.
- *   2. **Lightweight MCP initialize** through the proxy — falls back here if the Server
- *      Card endpoint 404s. We issue a real `initialize` JSON-RPC request, read the
- *      server info from the result, then drop the connection immediately.
- *
- * Result is deliberately loose-typed — different servers expose different shapes and
- * we don't want to gate the Preview-Card on schema-strictness.
+ * Strategy: ein leichtgewichtiger `initialize`-Handshake via Proxy. Das vorherige
+ * `.well-known/mcp-server-card`-Feature (MCP spec 2.1 draft) wurde entfernt, weil
+ * kaum ein produktiver Server es implementiert — der 404-Load-Error schnallte die
+ * DevTools-Console unnötig. `initialize` liefert alles, was die Preview-Card
+ * braucht (name, version, instructions, capability-Keys).
  */
 import type { FetchLike } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { createProxyFetch } from './useOAuth'
@@ -27,60 +22,11 @@ export interface ServerPreview {
   promptCount?: number
   authMode: AuthMode
   /** Whatever source we got the info from — for hover/debug display. */
-  source: 'server-card' | 'initialize'
+  source: 'initialize'
 }
 
 function asString(v: unknown): string | undefined {
   return typeof v === 'string' ? v : undefined
-}
-
-function asNumber(v: unknown): number | undefined {
-  return typeof v === 'number' && Number.isFinite(v) ? v : undefined
-}
-
-async function probeServerCard(mcpUrl: string, fetchFn: FetchLike, signal?: AbortSignal): Promise<ServerPreview | null> {
-  let origin: string
-  try {
-    origin = new URL(mcpUrl).origin
-  } catch {
-    return null
-  }
-  try {
-    const res = await fetchFn(`${origin}/.well-known/mcp-server-card`, {
-      method: 'GET',
-      signal,
-    })
-    if (!res.ok) return null
-    const body = (await res.json()) as unknown
-    if (!body || typeof body !== 'object') return null
-    const b = body as Record<string, unknown>
-    const capabilities = (b.capabilities as Record<string, unknown> | undefined) ?? {}
-    const toolCount = asNumber(
-      (capabilities.tools as Record<string, unknown> | undefined)?.count,
-    )
-    const resourceCount = asNumber(
-      (capabilities.resources as Record<string, unknown> | undefined)?.count,
-    )
-    const promptCount = asNumber(
-      (capabilities.prompts as Record<string, unknown> | undefined)?.count,
-    )
-    const authField = asString(b.authorization) ?? asString(b.auth)
-    const authMode: AuthMode =
-      authField === 'oauth2' || authField === 'oauth' ? 'oauth' : authField === 'none' ? 'none' : 'unknown'
-    return {
-      name: asString(b.name),
-      version: asString(b.version),
-      description: asString(b.description),
-      instructions: asString(b.instructions),
-      toolCount,
-      resourceCount,
-      promptCount,
-      authMode,
-      source: 'server-card',
-    }
-  } catch {
-    return null
-  }
 }
 
 async function probeInitialize(mcpUrl: string, fetchFn: FetchLike, signal?: AbortSignal): Promise<ServerPreview | null> {
@@ -162,7 +108,5 @@ export async function previewServer(
     return null
   }
   const fetchFn = createProxyFetch({})
-  const card = await probeServerCard(trimmed, fetchFn, signal)
-  if (card) return card
   return probeInitialize(trimmed, fetchFn, signal)
 }

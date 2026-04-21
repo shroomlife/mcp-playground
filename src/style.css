@@ -169,6 +169,12 @@
       radial-gradient(40% 35% at 90% 85%, rgba(170, 130, 210, 0.3) 0%, transparent 60%);
   }
 
+  /* Subtle fractal-noise texture — Background-URL wird in App.vue per Inline-Style
+     gesetzt, damit Vite die Asset-URL korrekt mit BASE_URL (GitHub Pages) ausliefert. */
+  .gradient-noise {
+    background-repeat: repeat;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .pulse-dot,
     .fade-in,

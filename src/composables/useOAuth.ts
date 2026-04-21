@@ -223,16 +223,9 @@ export async function probeOAuthSupport(
     return { supported: false, endpoints: [] }
   }
   let origin: string
-  let pathSuffix = ''
   try {
     const parsed = new URL(trimmed)
     origin = parsed.origin
-    // RFC 9728 §3.1 specifies `oauth-protected-resource/<resource-path>` as
-    // canonical — we probe that variant in addition to the bare path so servers
-    // that only implement the canonical form (a reasonable choice) aren't
-    // falsely reported as "no OAuth". Trailing slash stripped so we don't
-    // produce `/.well-known/oauth-protected-resource//`.
-    pathSuffix = parsed.pathname.replace(/\/+$/, '')
   } catch {
     return {
       supported: false,
@@ -293,13 +286,13 @@ export async function probeOAuthSupport(
     }
   }
 
+  // Nur die beiden RFC-8414/9728-Root-Endpoints — der Pfad-Suffix-Variant
+  // (RFC 9728 §3.1 canonical) wurde entfernt, weil er in der Praxis selten
+  // implementiert ist und jeder 404 als Browser-Console-Error hängen bleibt.
   const probeTargets = [
     `${origin}/.well-known/oauth-authorization-server`,
     `${origin}/.well-known/oauth-protected-resource`,
   ]
-  if (pathSuffix && pathSuffix !== '/') {
-    probeTargets.push(`${origin}/.well-known/oauth-protected-resource${pathSuffix}`)
-  }
   const endpoints = await Promise.all(probeTargets.map((t) => probe(t)))
   return {
     supported: endpoints.some((e) => e.status === 'ok'),
