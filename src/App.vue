@@ -222,9 +222,10 @@ function handleUrlChange(nextUrl: string) {
 function handleConnect(nextUrl: string, transport: TransportKind, _authHeaders: AuthHeader[]) {
   // Auth headers come from `auth.headers` (loaded per URL from localStorage); the
   // emit parameter is kept for signature parity with ConnectionForm. Route change
-  // triggers syncToRoute which runs connect(). New history entry means Back → Landing.
-  session.url.value = nextUrl
-  session.transport.value = transport
+  // triggers syncToRoute which is the single source of truth for session.url +
+  // session.transport sowie den State-Reset auf den alten vs. neuen Server.
+  // WICHTIG: hier nicht session.url voraus-schreiben — sonst denkt syncToRoute,
+  // der Server wäre "derselbe" und überspringt resetForNewServer().
   auth.loadForUrl(nextUrl)
   router.navigateToServer(nextUrl, transport)
 }
