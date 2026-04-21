@@ -63,6 +63,7 @@ const selectedRow = computed<ResourceRow | null>(() => {
 })
 
 function selectRow(row: ResourceRow) {
+  session.markUserSelection()
   selectedKey.value = row.key
 }
 

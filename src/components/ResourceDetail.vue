@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, ref, useTemplateRef } from 'vue'
 import { Loader2, Play, FileText, Link2, Download, Clock, Square, Eye } from 'lucide-vue-next'
 import JsonView from './JsonView.vue'
 import { useAbortableRun } from '~/composables/useAbortableRun'
+import { useSessionState } from '~/composables/useSessionState'
 import type {
   CallHistoryEntry,
   CallOptions,
@@ -50,8 +51,12 @@ const lastEntry = ref<CallHistoryEntry | null>(null)
 const rootRef = useTemplateRef<HTMLDivElement>('rootRef')
 const formRef = useTemplateRef<HTMLFormElement>('formRef')
 
-// See ToolDetail for rationale — scroll the header into view after the remount.
+const session = useSessionState()
+
+// Scroll only for user-driven selection (Explorer `selectRow`), not on initial
+// restore from sessionStorage or server-switch mount. Siehe ToolDetail.
 onMounted(() => {
+  if (!session.consumeUserSelection()) return
   void nextTick(() => {
     rootRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   })

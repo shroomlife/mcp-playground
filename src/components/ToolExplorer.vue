@@ -40,6 +40,10 @@ const selectedTool = computed<McpTool | null>(() => {
 })
 
 function selectTool(tool: McpTool) {
+  // User-Click markieren, damit ToolDetail im onMounted zur Detail-Pane
+  // scrollen darf. Restore-from-Storage (Mount ohne User-Interaction)
+  // löst KEINEN Scroll aus.
+  session.markUserSelection()
   selectedName.value = tool.name
 }
 

@@ -96,10 +96,12 @@ const rootRef = useTemplateRef<HTMLDivElement>('rootRef')
 const formRef = useTemplateRef<HTMLFormElement>('formRef')
 
 // Parent keys us on tool.name, so switching tools remounts this component.
-// After mount we nudge the nearest scroll container to this header — otherwise,
-// picking a tool while scrolled to the bottom of a long list leaves the user
-// staring at the list footer instead of the freshly-loaded detail pane.
+// After a user-initiated selection we nudge the page to the detail pane —
+// otherwise picking a tool from the list bottom leaves the viewport stuck on
+// the list footer. Restore-from-sessionStorage (page refresh, server switch)
+// must NOT scroll, so the scroll is gated on `consumeUserSelection()`.
 onMounted(() => {
+  if (!session.consumeUserSelection()) return
   void nextTick(() => {
     rootRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   })

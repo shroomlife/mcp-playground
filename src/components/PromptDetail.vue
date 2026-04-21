@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, ref, useTemplateRef } from 'vue'
 import { Loader2, MessageSquareText, Play, RotateCcw, Clock, User, Bot, Square, Eye } from 'lucide-vue-next'
 import JsonView from './JsonView.vue'
 import { useAbortableRun } from '~/composables/useAbortableRun'
+import { useSessionState } from '~/composables/useSessionState'
 import type {
   CallHistoryEntry,
   CallOptions,
@@ -35,8 +36,13 @@ const lastEntry = ref<CallHistoryEntry | null>(null)
 const rootRef = useTemplateRef<HTMLDivElement>('rootRef')
 const formRef = useTemplateRef<HTMLFormElement>('formRef')
 
-// See ToolDetail for rationale — scroll the header into view after the remount.
+const session = useSessionState()
+
+// Scroll to the detail pane only when the mount was triggered by a user click
+// (Explorer `selectPrompt`). Restore-from-sessionStorage / server-switch
+// mounts stay silent, no page jump. Siehe ToolDetail für die Begründung.
 onMounted(() => {
+  if (!session.consumeUserSelection()) return
   void nextTick(() => {
     rootRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   })

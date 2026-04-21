@@ -38,6 +38,7 @@ const selected = computed<McpPrompt | null>(() => {
 })
 
 function selectPrompt(prompt: McpPrompt) {
+  session.markUserSelection()
   selectedName.value = prompt.name
 }
 

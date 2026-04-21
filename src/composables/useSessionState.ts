@@ -117,6 +117,24 @@ function create() {
     persist,
   )
 
+  /**
+   * Flag: the last selection happened through a click (Explorer list) rather
+   * than a sessionStorage-restore on mount. Detail-Panes read this in their
+   * onMounted-Hook to decide whether to scroll into view — we don't want the
+   * page to jump when the user just refreshed or switched servers.
+   */
+  const userSelectedInteractively = ref(false)
+
+  function consumeUserSelection(): boolean {
+    if (!userSelectedInteractively.value) return false
+    userSelectedInteractively.value = false
+    return true
+  }
+
+  function markUserSelection() {
+    userSelectedInteractively.value = true
+  }
+
   function clearConnection() {
     url.value = ''
     toolName.value = null
@@ -125,6 +143,28 @@ function create() {
     searchTools.value = ''
     searchPrompts.value = ''
     searchResources.value = ''
+    // Drain any mark-user-selection flag that never got consumed (e.g. user
+    // clicked a tool then disconnected before the detail pane mounted).
+    userSelectedInteractively.value = false
+  }
+
+  /**
+   * Reset session state when switching to a different MCP server. Keeps
+   * url/transport (caller sets those), but clears the per-server selection
+   * and search state and puts the UI back on the Tools tab. So artifacts
+   * from the previous server don't bleed into the new connection.
+   */
+  function resetForNewServer() {
+    tab.value = 'tools'
+    toolName.value = null
+    promptName.value = null
+    resourceKey.value = null
+    searchTools.value = ''
+    searchPrompts.value = ''
+    searchResources.value = ''
+    // Flag drainen — ein möglicher "true" Rest aus dem vorherigen Server
+    // würde sonst beim ersten Detail-Mount auf dem neuen Server scrollen.
+    userSelectedInteractively.value = false
   }
 
   return {
@@ -138,6 +178,9 @@ function create() {
     searchPrompts,
     searchResources,
     clearConnection,
+    resetForNewServer,
+    markUserSelection,
+    consumeUserSelection,
   }
 }
 

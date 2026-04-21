@@ -151,6 +151,13 @@ async function syncToRoute(route: RouteState, authCode?: string) {
   if (route.path === 'server' && route.mcpUrl) {
     const t: TransportKind = route.transport ?? 'http'
     const recipe = route.recipe
+    // Beim Wechsel auf einen anderen Server: Tab + Selections + Searches
+    // zurücksetzen, damit kein Artefakt aus der vorherigen Verbindung bleibt.
+    // Vergleich ist case-/slash-robust: kleine URL-Variationen (Browser-
+    // Autocomplete, OAuth-Return mit lowercased host, trailing slash) sollen
+    // KEINEN Reset auslösen — das wäre ein Datenverlust für denselben Server.
+    const isNewServer = normalizeMcpUrl(session.url.value) !== normalizeMcpUrl(route.mcpUrl)
+    if (isNewServer) session.resetForNewServer()
     if (recipe) {
       // Preselect the recipe's tool + stash its args for the about-to-mount ToolDetail.
       session.toolName.value = recipe.toolName
@@ -167,7 +174,31 @@ async function syncToRoute(route: RouteState, authCode?: string) {
     session.url.value = route.mcpUrl
     session.transport.value = t
     auth.loadForUrl(route.mcpUrl)
+    // Recipe-triggered Select zählt als User-Aktion → Detail-Pane darf scrollen.
+    // Flag erst NACH dem alreadyThere-Guard setzen, sonst würde der Flag auf
+    // einen nachfolgenden Mount leaken, der gar nicht vom Recipe ausgelöst war.
+    if (recipe) session.markUserSelection()
     await connect(route.mcpUrl, t, auth.headers.value, authCode)
+  }
+}
+
+/**
+ * Normalisiert eine MCP-URL fürs reine Gleichheits-Matching. Case-Lowering auf
+ * scheme+host, Trailing-Slash auf der Pathname entfernt. Invalide Strings
+ * bekommen nur getrimmt+lowercased — dann vergleicht String-Gleichheit
+ * konsistent.
+ */
+function normalizeMcpUrl(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+  try {
+    const u = new URL(trimmed)
+    const path = u.pathname.replace(/\/+$/, '')
+    const search = u.search
+    const hash = u.hash
+    return `${u.protocol}//${u.host.toLowerCase()}${path}${search}${hash}`
+  } catch {
+    return trimmed.toLowerCase()
   }
 }
 
