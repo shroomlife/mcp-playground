@@ -11,6 +11,20 @@ Ergebnisse lassen sich als JSON-Tree filtern und durchsuchen.
 Deploybar auf GitHub Pages in 2 Minuten. Läuft lokal mit SSRF-gehärtetem Dev-Proxy für
 Server ohne CORS.
 
+Live: **[shroomlife.github.io/mcp-playground](https://shroomlife.github.io/mcp-playground/)**
+
+## Screenshots
+
+| Landing | Connected mit Tools |
+|---|---|
+| ![Landing](./docs/screenshots/01-landing.png) | ![Connected](./docs/screenshots/02-connected-tools.png) |
+
+| Tool-Call mit strukturiertem Ergebnis | Capability-Tab (Experimental) |
+|---|---|
+| ![Tool Result](./docs/screenshots/03-tool-result.png) | ![Experimental Tab](./docs/screenshots/04-experimental-tab.png) |
+
+![JSON-RPC Trace](./docs/screenshots/05-rpc-trace.png)
+
 ## Features
 
 ### Verbinden & Authentifizieren
@@ -18,15 +32,18 @@ Server ohne CORS.
 - 🔌 **HTTP Streamable oder SSE** mit OAuth 2.1, Bearer-Token oder Custom Auth-Headern
 - 🔐 **OAuth 2.1 + Dynamic Client Registration** — Discovery (RFC 9728), DCR (RFC 7591),
   PKCE, Token-Refresh. Kein manuelles Client-Setup, einfach "Anmelden" klicken
-- 🧭 **Server Card Preview** — `.well-known/mcp-server-card` + initialize-Probe schon auf
-  der Landing, bevor du überhaupt verbindest
-- 🗂️ **Server Registry** — kuratierter Katalog mit Filter (Offen / OAuth) für bekannte
-  public MCP-Server (DeepWiki, Hugging Face, Cloudflare Docs, GitHub, Linear, Notion, …)
+- 🔑 **Token-Inspektor** nach OAuth-Login — Access-/Refresh-Token, Scope, Client-ID,
+  Ablauf-Countdown, fertiger `curl`-Aufruf (Token maskiert, bewusstes Kopieren)
+- 🧭 **Server Preview** auf der Landing — leichtgewichtiger `initialize`-Probe zeigt
+  Name, Version, Auth-Mode, bevor du verbindest
+- 📚 **Zuletzt verbunden** — Server-History mit Klick-zum-Reconnect (cross-tab, `localStorage`)
 
 ### Erkunden & Ausführen
 
 - 🔍 **Split-View Explorer** für Tools/Resources/Prompts — durchsuchbare Listen, Descriptions,
   Schemas, Ausführung inline in der Detail-Pane
+- 🗂️ **Capabilities als Tabs** — Tools / Resources / Prompts immer da, `experimental` +
+  `extensions` erscheinen dynamisch mit den vom Server deklarierten Feature-Keys
 - ▶️ **Form → Run → Result → History** in einem Flow — kein Modal-Hopping
 - 📡 **Live-Progress & Cancel** — Server-Progress-Notifications als Balken, Stop-Button für
   laufende Calls (via AbortController)
@@ -54,9 +71,11 @@ Server ohne CORS.
 
 - 📦 **Multi-Client Install** — Claude Code, Cursor, VS Code, Windsurf. Für Claude Code
   direktes Schreiben in `.mcp.json` via File-System-Access-API, sonst Snippet-Copy
+- 🔐 **Auth in `.mcp.json` übernehmen** — OAuth-Token oder Bearer werden als
+  `Authorization: Bearer ${ENV_VAR}` geschrieben (Default) oder optional inline mit
+  Warn-Alert. Env-Var-Name wird aus dem Server-Namen automatisch vorgeschlagen
 - 🔖 **URL-Routing** — jeder Server hat eine eigene URL (`#/s/mcp.deepwiki.com/mcp`),
   Browser-Back/Forward funktioniert, URLs sind shareable
-- 📚 **Zuletzt verbunden** — Server-History (cross-tab, localStorage)
 
 ### DX / UX
 
