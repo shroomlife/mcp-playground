@@ -35,7 +35,6 @@ const {
   prompts,
   log,
   callHistory,
-  capabilityList,
   counts,
   connect,
   disconnect,
@@ -119,7 +118,9 @@ const activeAuthCount = computed(() => {
 })
 
 // OAuth-State wird im AuthConfigPanel angezeigt UND in den Install-Dialog
-// weitergegeben. Revision-Tick sorgt dafür, dass Login/Logout hier reaktiv ankommt.
+// weitergegeben. Die Revision wird im useOAuth-Composable bei jeder Token-
+// Operation bumped — durch das Lesen im computed registriert Vue sie als
+// reaktive Dependency und feuert bei Login/Logout/Refresh neu.
 const oauthRevision = useOAuthRevision()
 const oauthAccessToken = computed(() => {
   void oauthRevision.value
@@ -403,8 +404,6 @@ function handleDisconnect() {
     <template v-else>
       <ConnectedHeader
         :server="server"
-        :capabilities="capabilityList"
-        :capability-details="server?.capabilities"
         :latency-ms="latencyMs"
         :counts="counts"
         :url="url"
@@ -450,6 +449,7 @@ function handleDisconnect() {
           :call-history="callHistory"
           :trace-entries="traceEntries"
           :is-connected="isConnected"
+          :capabilities="server?.capabilities"
           :run-tool="callTool"
           :run-prompt="getPrompt"
           :read-resource="readResource"

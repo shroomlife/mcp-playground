@@ -635,6 +635,9 @@ export function useMcpPlayground() {
           url: p.url,
           elicitationId: p.elicitationId,
         })
+        // Cast ist nötig: SDK's ClientResult-Union enthält eine `task`-Variante,
+        // die unser ElicitationResult nicht modelliert — wir liefern nur das
+        // Standard-Accept/Decline/Cancel-Shape, was MCP-legal ist.
         return result as { action: 'accept' | 'decline' | 'cancel'; content?: Record<string, unknown> }
       })
 

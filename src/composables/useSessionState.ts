@@ -3,8 +3,24 @@ import type { TransportKind } from './useMcpPlayground'
 
 const STORAGE_KEY = 'mcp-playground:session'
 
-export type TabId = 'tools' | 'resources' | 'prompts' | 'rpc' | 'log'
-const TAB_IDS: readonly TabId[] = ['tools', 'resources', 'prompts', 'rpc', 'log']
+export type TabId =
+  | 'tools'
+  | 'resources'
+  | 'prompts'
+  | 'rpc'
+  | 'log'
+  | 'extensions'
+  | 'experimental'
+
+const TAB_IDS: readonly TabId[] = [
+  'tools',
+  'resources',
+  'prompts',
+  'rpc',
+  'log',
+  'extensions',
+  'experimental',
+]
 
 interface Snapshot {
   url: string

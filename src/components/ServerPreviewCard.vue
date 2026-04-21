@@ -68,7 +68,14 @@ watch(
 
 const title = computed<string>(() => {
   const p = preview.value
-  return p?.name ?? new URL(props.url).host
+  if (p?.name) return p.name
+  // URL kann zwischen Watcher und Render-Cycle ungültig werden — den TypeError
+  // nicht propagieren lassen, stattdessen auf den Raw-String zurückfallen.
+  try {
+    return new URL(props.url).host
+  } catch {
+    return props.url
+  }
 })
 
 const sortedCounts = computed(() => {

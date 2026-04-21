@@ -97,28 +97,40 @@ src/
     useTheme.ts               # Light/Dark Toggle + localStorage-Persistenz
   components/
     ConnectionForm.vue        # URL + Transport-Wahl + Auth + Submit (Landing)
-    AuthConfigPanel.vue       # OAuth Login/Logout + Bearer + Custom-Header Eingabe
+    AuthConfigPanel.vue       # OAuth Login/Logout + Token-Inspektor + Manual-Header-Collapsible
+    ManualAuthFields.vue      # Bearer + Custom-Header-Inputs (extrahiert, Re-use)
     RecentServers.vue         # "Zuletzt verbunden" Liste auf Landing (aus useServerHistory)
     ServerRegistry.vue        # Kuratierter Public-Server-Katalog auf Landing (Filter + Auth-Badges)
-    ConnectedHeader.vue       # Sticky Server-Strip nach Handshake
+    ServerPreviewCard.vue     # Probe-Card unter der URL-Eingabe (initialize-Fingerabdruck)
+    ConnectedHeader.vue       # Sticky Server-Strip nach Handshake (ohne Capability-Chips, siehe Tabs)
     ServerInstructions.vue    # Dismissible Banner für server.instructions
     ThemeToggle.vue           # Mond/Sonne-Button, bindet useTheme
-    InspectorPanels.vue       # Tabs + Host der Explorer + Log-Tab (SERVER/CLIENT source)
+    InspectorPanels.vue       # Tabs: Tools / Resources / Prompts / Extensions / Experimental / RPC / Log
     ToolExplorer.vue          # Split-View: suchbare Tool-Liste + Detail
     ToolDetail.vue            # Rechte Pane: SchemaForm → Run/Cancel → Progress → Result → History
     PromptExplorer.vue        # Split-View für Prompts
     PromptDetail.vue          # Rechte Pane: Args → Get/Cancel → Messages → History
     ResourceExplorer.vue      # Split-View für Resources + Templates
     ResourceDetail.vue        # Rechte Pane: Placeholders → Read/Cancel → Content → History
+    CapabilityFeaturesPanel.vue # Tab-Content für experimental/extensions (Feature-Keys + Empty-State + Raw-JSON)
+    RpcTracePanel.vue         # Live-Trace der JSON-RPC-Calls + freier Custom-Request-Builder
+    ElicitationDialog.vue     # Globaler Dialog für server-initiierte elicitation/create-Requests
     SchemaForm.vue            # Generisches Formular aus JSON-Schema
-    ToolResultView.vue        # Pretty/Raw Darstellung der Tool-Antwort (+ Aborted-State)
+    ToolResultView.vue        # Pretty/Explorer/Raw Darstellung der Tool-Antwort (+ Aborted-State)
     ErrorPanel.vue            # Fachliche Fehlerklassifikation (+ OAUTH_REQUIRED Softpanel)
-    InstallToClaudeCode.vue   # Dialog: MCP-Server in .mcp.json schreiben
+    InstallToClaudeCode.vue   # Dialog: MCP-Server in .mcp.json schreiben (inkl. Auth-Übernahme)
     JsonView.vue              # Tree-View Wrapper mit Filter-Input + Copy-All
     JsonNode.vue              # Recursive Tree-Node: kollabierbar, Match-Highlight
+  composables/ (zusätzlich)
+    useServerPreview.ts       # Probe-Logic für ServerPreviewCard (initialize-Snapshot)
+    useFixtures.ts            # Persistente Tool-Argument-Fixtures pro Server
+    useElicitation.ts         # Queue + Promise-API für Server-initiated Elicitations
+    useRecipeInbox.ts         # Recipe-Share-URL-Stash (ein Recipe → Tool-Detail beim Mount)
   lib/
     schemaFormHelpers.ts      # analyzeSchema / validateArgs / stripEmpty
-    claudeCodeInstall.ts      # File-System-Access-API Integration
+    claudeCodeInstall.ts      # File-System-Access-API Integration (+ Auth-Injection, ENV-Var-Mode)
+    capabilityCopy.ts         # Deutsche Erklärungen pro Capability + describeCapability-Helper
+    corsDiagnostic.ts         # Probe-Klassifikation für "wieso klappt die Verbindung nicht"
   data/
     public-servers.ts         # Kuratierte Liste Public MCP-Server (ServerRegistry)
 ```
@@ -192,6 +204,30 @@ einen expliziten Fehler — kein leises "Nichts-passiert" mehr. **Fehler aus `be
 werden propagiert** (nicht in den globalen State geschrieben); `AuthConfigPanel` fängt
 sie lokal und rendert sie inline, damit die umgebende Connected/Landing-Ansicht stabil
 bleibt.
+
+**Capabilities als Tabs** (ab v0.3.0) — Der Connected-Header hat keinen Capability-
+Chip-Strip mehr. Stattdessen rendert `InspectorPanels` bei aktivem OAuth-Server mit
+`experimental`- oder `extensions`-Capability zusätzliche Tabs. Jeder Tab zeigt die
+tatsächlich vom Server deklarierten Feature-Keys (als Liste + Raw-JSON-Details) oder
+einen Empty-State, wenn die Capability deklariert aber leer ist. Sub-Flags wie
+`tools.listChanged` oder `resources.subscribe` sind keine eigenen Tabs — sie
+beschreiben Sub-Verhalten der Haupt-Tabs und sollten dort (ggf. als Badge) kommuniziert
+werden, wenn relevant.
+
+**Token-Inspektor** (ab v0.2.5) — Das `AuthConfigPanel` bekommt nach erfolgreichem
+OAuth-Login ein **Token-Details**-Collapsible: Access-/Refresh-Token (maskiert, mit
+Eye-Toggle und Copy), Scope, Client-ID, Ablauf-Countdown, ready-to-paste curl-Aufruf.
+Alle Werte werden aus `readOAuthSession(url)` gelesen; Reaktivität läuft über
+`useOAuthRevision()`, die bei jedem `saveTokens`/`clearOAuth`/`invalidateCredentials`
+gebumped wird. Die manuellen Bearer/Custom-Header-Felder sind über
+`ManualAuthFields.vue` extrahiert und werden bei aktivem OAuth in ein Reka-Collapsible
+verpackt (v-if, nicht v-show — sonst bleiben Password-Inputs per Tab fokussierbar).
+
+**Install-to-ClaudeCode mit Auth** (ab v0.2.5) — Der Install-Dialog übernimmt
+OAuth-/Bearer-/Custom-Header in die `.mcp.json`. Default-Modus schreibt den
+Platzhalter `Authorization: Bearer ${MCP_<SERVER>_TOKEN}` plus eine deutsche
+Anleitung, wie der User die Env-Var setzt — kein Roh-Token im committed File.
+Inline-Modus mit Warn-Alert existiert für den "egal, ist eh mein Kram"-Fall.
 
 **Server-History** — `useServerHistory` hält die letzten 12 erfolgreich verbundenen Server
 in `localStorage`. `touch(url, transport, serverName?)` wird in App.vue über `watch(state)`

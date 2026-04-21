@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { OctagonAlert, CircleSlash, FileText, Image as ImageIcon, Link2, Copy, Check } from 'lucide-vue-next'
 import JsonView from './JsonView.vue'
 import type { ToolCallResult } from '~/composables/useMcpPlayground'
@@ -82,6 +82,12 @@ async function copyRaw() {
     // clipboard not available
   }
 }
+
+// Timer-Cleanup: Component wird per :key="tool.name" remounted, Timer müsste
+// sonst gegen eine dead ref feuern.
+onBeforeUnmount(() => {
+  if (rawCopyTimer) clearTimeout(rawCopyTimer)
+})
 
 const contentItems = computed(() => {
   if (!props.result?.content) return []

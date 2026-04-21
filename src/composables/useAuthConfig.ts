@@ -120,13 +120,12 @@ export function useAuthConfig() {
     headers.value = []
   }
 
-  watch(
-    [headers, currentUrl],
-    ([nextHeaders, nextUrl]) => {
-      if (nextUrl) writeToStorage(nextUrl, nextHeaders)
-    },
-    { deep: true },
-  )
+  // Kein deep-Watch: `headers` wird bei jeder Mutation als neues Array
+  // zugewiesen (siehe addHeader/updateHeader/removeHeader unten), Reference-
+  // Check reicht für den Storage-Sync.
+  watch([headers, currentUrl], ([nextHeaders, nextUrl]) => {
+    if (nextUrl) writeToStorage(nextUrl, nextHeaders)
+  })
 
   return {
     headers,

@@ -1,10 +1,20 @@
 <script setup lang="ts">
+import { computed, watch } from 'vue'
 import { TabsRoot, TabsList, TabsTrigger, TabsContent } from 'reka-ui'
-import { Wrench, FileText, MessageSquareText, ScrollText, Radio } from 'lucide-vue-next'
+import {
+  Wrench,
+  FileText,
+  MessageSquareText,
+  ScrollText,
+  Radio,
+  Beaker,
+  Puzzle,
+} from 'lucide-vue-next'
 import ToolExplorer from './ToolExplorer.vue'
 import ResourceExplorer from './ResourceExplorer.vue'
 import PromptExplorer from './PromptExplorer.vue'
 import RpcTracePanel from './RpcTracePanel.vue'
+import CapabilityFeaturesPanel from './CapabilityFeaturesPanel.vue'
 import { useSessionState } from '~/composables/useSessionState'
 import type {
   CallHistoryEntry,
@@ -17,7 +27,7 @@ import type {
   TraceEntry,
 } from '~/composables/useMcpPlayground'
 
-defineProps<{
+const props = defineProps<{
   tools: McpTool[]
   resources: McpResource[]
   resourceTemplates: McpResourceTemplate[]
@@ -26,6 +36,8 @@ defineProps<{
   callHistory: CallHistoryEntry[]
   traceEntries: TraceEntry[]
   isConnected: boolean
+  /** Raw server capabilities map — treibt Extensions/Experimental-Tabs an. */
+  capabilities?: Record<string, unknown>
   runTool: (
     name: string,
     args: Record<string, unknown>,
@@ -45,6 +57,37 @@ defineProps<{
 
 const session = useSessionState()
 const tab = session.tab
+
+// Tabs für frei definierte Vendor-Capabilities. Sichtbar nur wenn der Server
+// den Key im Handshake deklariert hat (auch mit leerem Object — Tab zeigt dann
+// den Empty-State). `listsFeatureKeys`-Capabilities aus capabilityCopy: experimental,
+// extensions. Hardcoded hier, damit das Tab-Layout statisch und ARIA-stabil bleibt.
+const extensionsEntry = computed(() => props.capabilities?.extensions)
+const experimentalEntry = computed(() => props.capabilities?.experimental)
+const hasExtensions = computed(
+  () => typeof extensionsEntry.value === 'object' && extensionsEntry.value !== null,
+)
+const hasExperimental = computed(
+  () => typeof experimentalEntry.value === 'object' && experimentalEntry.value !== null,
+)
+
+function featureCount(entry: unknown): number {
+  if (!entry || typeof entry !== 'object') return 0
+  return Object.keys(entry as Record<string, unknown>).length
+}
+
+// Wenn der aktuell aktive Tab durch Disconnect/Reconnect verschwindet, fall back
+// auf Tools — sonst würde Reka mit unbekanntem Value rendern.
+const availableTabs = computed(() => {
+  const base = ['tools', 'resources', 'prompts', 'rpc', 'log']
+  if (hasExtensions.value) base.push('extensions')
+  if (hasExperimental.value) base.push('experimental')
+  return base
+})
+
+watch(availableTabs, (list) => {
+  if (!list.includes(tab.value)) tab.value = 'tools'
+})
 
 function formatTime(at: number) {
   const d = new Date(at)
@@ -124,6 +167,42 @@ function formatTime(at: number) {
           />
         </TabsTrigger>
         <TabsTrigger
+          v-if="hasExtensions"
+          value="extensions"
+          class="focus-ring relative flex items-center gap-2 px-5 py-3 text-[13px] font-medium text-fg-muted data-[state=active]:text-fg data-[state=active]:bg-surface transition-colors"
+        >
+          <Puzzle :size="14" :stroke-width="1.75" />
+          <span>Extensions</span>
+          <span
+            class="font-mono text-[11px] tabular-nums px-1.5 rounded"
+            :class="tab === 'extensions' ? 'bg-accent-soft text-accent' : 'text-fg-muted'"
+          >
+            {{ featureCount(extensionsEntry) }}
+          </span>
+          <span
+            v-if="tab === 'extensions'"
+            class="absolute inset-x-4 -bottom-px h-[2px] bg-accent rounded-full"
+          />
+        </TabsTrigger>
+        <TabsTrigger
+          v-if="hasExperimental"
+          value="experimental"
+          class="focus-ring relative flex items-center gap-2 px-5 py-3 text-[13px] font-medium text-fg-muted data-[state=active]:text-fg data-[state=active]:bg-surface transition-colors"
+        >
+          <Beaker :size="14" :stroke-width="1.75" />
+          <span>Experimental</span>
+          <span
+            class="font-mono text-[11px] tabular-nums px-1.5 rounded"
+            :class="tab === 'experimental' ? 'bg-warning-soft text-warning' : 'text-fg-muted'"
+          >
+            {{ featureCount(experimentalEntry) }}
+          </span>
+          <span
+            v-if="tab === 'experimental'"
+            class="absolute inset-x-4 -bottom-px h-[2px] bg-warning rounded-full"
+          />
+        </TabsTrigger>
+        <TabsTrigger
           value="rpc"
           class="focus-ring relative flex items-center gap-2 px-5 py-3 text-[13px] font-medium text-fg-muted data-[state=active]:text-fg data-[state=active]:bg-surface transition-colors ml-auto"
         >
@@ -178,6 +257,20 @@ function formatTime(at: number) {
           :history="callHistory"
           :is-connected="isConnected"
           :run-prompt="runPrompt"
+        />
+      </TabsContent>
+
+      <TabsContent v-if="hasExtensions" value="extensions" class="focus:outline-none">
+        <CapabilityFeaturesPanel
+          capability-key="extensions"
+          :entry="extensionsEntry"
+        />
+      </TabsContent>
+
+      <TabsContent v-if="hasExperimental" value="experimental" class="focus:outline-none">
+        <CapabilityFeaturesPanel
+          capability-key="experimental"
+          :entry="experimentalEntry"
         />
       </TabsContent>
 

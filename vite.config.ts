@@ -9,6 +9,32 @@ const pkg = JSON.parse(
   readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf-8'),
 ) as { version: string }
 
+/**
+ * Liefert true für Loopback (127/8, ::1) und alle IPv4-Private-Ranges
+ * (RFC 1918 — 10/8, 172.16/12, 192.168/16) sowie Link-Local (169.254/16, fe80::/10).
+ * Non-IP-Hostnames kommen als `false` zurück und werden vom DNS-Resolver
+ * aufgelöst — für den Playground-Scope reicht die IP-Form (User gibt konkrete
+ * Host-URLs ein; wenn jemand `internal.local` erreicht, ist der Betreiber
+ * selbst verantwortlich).
+ */
+function isPrivateOrLoopbackIp(hostname: string): boolean {
+  // IPv6: eckige Klammern sind im hostname-Feld schon entfernt
+  if (hostname === '::1' || hostname.startsWith('fe80:') || hostname.startsWith('fc') || hostname.startsWith('fd')) {
+    return true
+  }
+  const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(hostname)
+  if (!ipv4) return false
+  const a = Number(ipv4[1])
+  const b = Number(ipv4[2])
+  if (a === 10) return true
+  if (a === 127) return true
+  if (a === 169 && b === 254) return true
+  if (a === 172 && b >= 16 && b <= 31) return true
+  if (a === 192 && b === 168) return true
+  if (a === 0) return true
+  return false
+}
+
 function mcpProxy() {
   return {
     name: 'mcp-proxy',
@@ -53,19 +79,25 @@ function mcpProxy() {
           return
         }
 
-        // Block cloud-metadata endpoints (SSRF hardening)
+        // SSRF-Hardening: Proxy darf keine internen Ressourcen anfassen. Neben
+        // Cloud-Metadata-Endpunkten sind Loopback, IPv6-Loopback und alle RFC-
+        // 1918/RFC-4193-Private-Ranges geblockt. Das schützt den Dev-Host vor
+        // Requests, die einen lokalen Service (DBs, Admin-UIs) über den Proxy
+        // ansprechen wollen. In Production-Builds existiert der Proxy nicht.
+        const hostname = parsedTarget.hostname.toLowerCase()
         const blockedHosts = new Set([
           '169.254.169.254',
           'metadata.google.internal',
           'metadata.goog',
+          'localhost',
         ])
-        if (blockedHosts.has(parsedTarget.hostname.toLowerCase())) {
+        if (blockedHosts.has(hostname) || isPrivateOrLoopbackIp(hostname)) {
           res.statusCode = 403
           res.setHeader('content-type', 'application/json')
           res.end(JSON.stringify({
             error: 'host_blocked',
             code: 'HOST_BLOCKED',
-            message: `Host ${parsedTarget.hostname} ist gesperrt`,
+            message: `Host ${parsedTarget.hostname} ist gesperrt (SSRF-Schutz)`,
             target,
           }))
           return

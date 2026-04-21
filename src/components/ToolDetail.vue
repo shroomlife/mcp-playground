@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, toRef, useTemplateRef } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
 import { Play, Loader2, RotateCcw, Clock, ArrowDownUp, Square, Link2, Check, Bookmark, X, Eye } from 'lucide-vue-next'
 import SchemaForm from './SchemaForm.vue'
 import ToolResultView from './ToolResultView.vue'
@@ -53,7 +53,8 @@ const session = useSessionState()
 const recipeCopied = ref(false)
 let recipeCopyTimer: ReturnType<typeof setTimeout> | null = null
 
-const fixturesApi = useFixtures(toRef(session.url))
+// session.url ist bereits ein Ref — `toRef` wäre ein No-Op. Direkt reinreichen.
+const fixturesApi = useFixtures(session.url)
 const toolFixtures = fixturesApi.forTool(props.tool.name)
 
 function saveCurrentAsFixture() {
@@ -102,6 +103,12 @@ onMounted(() => {
   void nextTick(() => {
     rootRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   })
+})
+
+// Timer-Cleanup: Parent :key-remounts dieses Component beim Tool-Wechsel. Ohne
+// Cleanup würde ein pending 1.5s-Reset-Timer gegen die dann-dead ref feuern.
+onBeforeUnmount(() => {
+  if (recipeCopyTimer) clearTimeout(recipeCopyTimer)
 })
 
 function resetArgs() {

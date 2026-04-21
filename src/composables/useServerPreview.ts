@@ -130,15 +130,18 @@ async function probeInitialize(mcpUrl: string, fetchFn: FetchLike, signal?: Abor
     const p = parsed as Record<string, unknown>
     const result = (p.result as Record<string, unknown> | undefined) ?? {}
     const serverInfo = (result.serverInfo as Record<string, unknown> | undefined) ?? {}
-    const capabilities = (result.capabilities as Record<string, unknown> | undefined) ?? {}
     const authMode: AuthMode = 'none'
     return {
       name: asString(serverInfo.name),
       version: asString(serverInfo.version),
       instructions: asString(result.instructions),
-      toolCount: capabilities.tools ? 0 : undefined, // we know the capability exists but not the count
-      resourceCount: capabilities.resources ? 0 : undefined,
-      promptCount: capabilities.prompts ? 0 : undefined,
+      // Capability-Keys sagen nur: "Feature existiert". Die echte Anzahl
+      // kennen wir erst nach `tools/list` — also `undefined` lassen, damit
+      // der Preview-Card kein falsches "0 Tools" für einen Server mit 50
+      // Tools anzeigt.
+      toolCount: undefined,
+      resourceCount: undefined,
+      promptCount: undefined,
       authMode,
       source: 'initialize',
     }

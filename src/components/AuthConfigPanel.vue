@@ -23,7 +23,6 @@ import {
   Loader2,
   LogIn,
   LogOut,
-  Plus,
   RotateCw,
   ShieldOff,
   Terminal,
@@ -39,6 +38,7 @@ import {
 } from '~/composables/useOAuth'
 import type { OAuthProbeResult } from '~/composables/useOAuth'
 import type { AuthHeader } from '~/composables/useMcpPlayground'
+import ManualAuthFields from './ManualAuthFields.vue'
 
 const props = defineProps<{
   headers: AuthHeader[]
@@ -816,16 +816,18 @@ function updateValue(index: number, value: string) {
             </div>
           </div>
 
-          <!-- Manuelle Header — bei aktivem OAuth hinter Toggle verborgen, sonst direkt
-               sichtbar. v-if (nicht v-show) entfernt die Inputs komplett aus dem DOM,
-               damit sie im eingeklappten Zustand nicht per Tab fokussierbar bleiben. -->
-          <div v-if="oauthActive">
-            <button
-              type="button"
-              class="focus-ring w-full flex items-center gap-2.5 px-4 py-3 text-[13px] text-fg-2 hover:text-fg bg-surface-2/40 border border-border rounded-lg transition-colors"
-              :aria-expanded="manualHeadersOpen"
-              aria-controls="auth-manual-headers"
-              @click="manualHeadersOpen = !manualHeadersOpen"
+          <!-- Manuelle Header — bei aktivem OAuth als Reka-Collapsible (Trigger +
+               Content in einem Container, konsistent mit Token-Details oben). Ohne
+               OAuth direkt sichtbar, ohne Wrapper. v-if entfernt die Inputs komplett
+               aus dem DOM im eingeklappten Zustand — so bleiben Password-Felder nicht
+               per Tab fokussierbar hinter einem geschlossenen Panel. -->
+          <CollapsibleRoot
+            v-if="oauthActive"
+            v-model:open="manualHeadersOpen"
+            class="bg-surface-2/40 border border-border rounded-lg overflow-hidden"
+          >
+            <CollapsibleTrigger
+              class="focus-ring w-full flex items-center gap-2.5 px-4 py-3 text-[13px] text-fg-2 hover:text-fg transition-colors"
             >
               <SlidersHorizontal :size="14" class="shrink-0 text-fg-muted" />
               <span class="font-medium">Manuelle Header</span>
@@ -837,131 +839,50 @@ function updateValue(index: number, value: string) {
                 class="ml-auto text-fg-muted transition-transform"
                 :class="{ 'rotate-180': manualHeadersOpen }"
               />
-            </button>
-          </div>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div class="p-4 pt-3 space-y-3.5 border-t border-border">
+                <ManualAuthFields
+                  :bearer-token="bearerToken"
+                  :headers="customHeaders"
+                  :active-count="activeCount"
+                  :disabled="disabled"
+                  :show-bearer="showBearer"
+                  :visible-value-indexes="visibleValueIndexes"
+                  @update:show-bearer="showBearer = $event"
+                  @toggle-value-visibility="toggleValueVisibility"
+                  @update:bearer="emit('update:bearer', $event)"
+                  @update-key="updateKey"
+                  @update-value="updateValue"
+                  @remove-header="emit('remove-header', $event)"
+                  @add-header="emit('add-header')"
+                  @clear="emit('clear')"
+                />
+              </div>
+            </CollapsibleContent>
+          </CollapsibleRoot>
 
           <div
-            v-if="!oauthActive || manualHeadersOpen"
-            id="auth-manual-headers"
-            class="space-y-3.5"
-            :class="oauthActive ? 'pt-1' : ''"
+            v-else
+            class="space-y-3.5 pt-3.5"
           >
-          <!-- Bearer shortcut -->
-          <div :class="oauthActive ? '' : 'pt-3.5'">
-            <label
-              for="auth-bearer"
-              class="block text-[11.5px] font-medium text-fg-2 mb-1"
-            >
-              Bearer-Token
-              <span class="text-fg-muted font-normal">
-                — wird als
-                <code class="font-mono text-fg-2">Authorization: Bearer …</code> gesendet
-              </span>
-            </label>
-            <div class="flex items-stretch gap-2">
-              <div class="flex-1 relative">
-                <input
-                  id="auth-bearer"
-                  :value="bearerToken"
-                  :type="showBearer ? 'text' : 'password'"
-                  autocomplete="off"
-                  spellcheck="false"
-                  :disabled="disabled"
-                  placeholder="eyJhbGciOiJI…"
-                  class="focus-ring w-full h-9 pl-3 pr-9 bg-surface border border-border-strong rounded-md font-mono text-[12.5px] text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none disabled:bg-surface-2 disabled:text-fg-muted"
-                  @input="emit('update:bearer', ($event.target as HTMLInputElement).value)"
-                />
-                <button
-                  type="button"
-                  @click="showBearer = !showBearer"
-                  :aria-label="showBearer ? 'Token verbergen' : 'Token anzeigen'"
-                  class="focus-ring absolute right-1.5 top-1/2 -translate-y-1/2 p-1 text-fg-muted hover:text-fg rounded"
-                >
-                  <EyeOff v-if="showBearer" :size="13" />
-                  <Eye v-else :size="13" />
-                </button>
-              </div>
-            </div>
+            <ManualAuthFields
+              :bearer-token="bearerToken"
+              :headers="customHeaders"
+              :active-count="activeCount"
+              :disabled="disabled"
+              :show-bearer="showBearer"
+              :visible-value-indexes="visibleValueIndexes"
+              @update:bearer="emit('update:bearer', $event)"
+              @update:show-bearer="showBearer = $event"
+              @toggle-value-visibility="toggleValueVisibility"
+              @update-key="updateKey"
+              @update-value="updateValue"
+              @remove-header="emit('remove-header', $event)"
+              @add-header="emit('add-header')"
+              @clear="emit('clear')"
+            />
           </div>
-
-          <!-- Custom headers -->
-          <div>
-            <div class="flex items-center justify-between mb-1.5">
-              <label class="text-[11.5px] font-medium text-fg-2">
-                Weitere Headers
-              </label>
-              <button
-                v-if="activeCount > 0"
-                type="button"
-                @click="emit('clear')"
-                :disabled="disabled"
-                class="focus-ring text-[11px] text-fg-muted hover:text-danger underline underline-offset-2 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                alles löschen
-              </button>
-            </div>
-            <div class="space-y-2">
-              <div
-                v-for="{ header, index } in customHeaders"
-                :key="index"
-                class="flex items-stretch gap-2"
-              >
-                <input
-                  :value="header.key"
-                  type="text"
-                  spellcheck="false"
-                  autocomplete="off"
-                  placeholder="X-Api-Key"
-                  :disabled="disabled"
-                  class="focus-ring w-36 shrink-0 h-9 px-2.5 bg-surface border border-border-strong rounded-md font-mono text-[12px] text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none disabled:bg-surface-2"
-                  :aria-label="`Header ${index + 1} Name`"
-                  @input="updateKey(index, ($event.target as HTMLInputElement).value)"
-                />
-                <div class="flex-1 relative">
-                  <input
-                    :value="header.value"
-                    :type="visibleValueIndexes.has(index) ? 'text' : 'password'"
-                    spellcheck="false"
-                    autocomplete="off"
-                    placeholder="Wert"
-                    :disabled="disabled"
-                    class="focus-ring w-full h-9 pl-2.5 pr-9 bg-surface border border-border-strong rounded-md font-mono text-[12px] text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none disabled:bg-surface-2"
-                    :aria-label="`Header ${index + 1} Wert`"
-                    @input="updateValue(index, ($event.target as HTMLInputElement).value)"
-                  />
-                  <button
-                    type="button"
-                    @click="toggleValueVisibility(index)"
-                    :aria-label="visibleValueIndexes.has(index) ? 'Wert verbergen' : 'Wert anzeigen'"
-                    class="focus-ring absolute right-1 top-1/2 -translate-y-1/2 p-1 text-fg-muted hover:text-fg rounded"
-                  >
-                    <EyeOff v-if="visibleValueIndexes.has(index)" :size="12" />
-                    <Eye v-else :size="12" />
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  @click="emit('remove-header', index)"
-                  :disabled="disabled"
-                  class="focus-ring shrink-0 w-9 h-9 flex items-center justify-center bg-surface border border-border-strong rounded-md text-fg-muted hover:text-danger hover:border-danger/50 disabled:opacity-40 disabled:cursor-not-allowed"
-                  :aria-label="`Header ${index + 1} entfernen`"
-                >
-                  <X :size="13" />
-                </button>
-              </div>
-
-              <button
-                type="button"
-                @click="emit('add-header')"
-                :disabled="disabled"
-                class="focus-ring inline-flex items-center gap-1.5 h-8 px-2.5 border border-dashed border-border-strong rounded-md text-[11.5px] text-fg-muted hover:text-fg hover:border-fg/30 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <Plus :size="12" />
-                Header hinzufügen
-              </button>
-            </div>
-          </div>
-          </div><!-- /manual headers wrapper -->
 
           <!-- Reconnect action — only meaningful in Connected view. Sits inside the
                accordion so the compact header doesn't carry a second action button. -->
